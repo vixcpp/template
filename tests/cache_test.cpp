@@ -16,7 +16,7 @@
 #include <cassert>
 #include <iostream>
 #include <map>
-#include <optional>
+#include <memory>
 #include <string>
 
 #include <vix/template/Cache.hpp>
@@ -27,19 +27,19 @@ using namespace vix::template_;
 class MemoryCache : public Cache
 {
 public:
-  std::optional<Template> get(const std::string &name) const override
+  TemplatePtr get(const std::string &name) const override
   {
     const auto it = store_.find(name);
     if (it == store_.end())
     {
-      return std::nullopt;
+      return nullptr;
     }
     return it->second;
   }
 
-  void put(const std::string &name, const Template &tpl) override
+  void put(const std::string &name, TemplatePtr tpl) override
   {
-    store_[name] = tpl;
+    store_[name] = std::move(tpl);
   }
 
   bool erase(const std::string &name) override
@@ -58,12 +58,12 @@ public:
   }
 
 private:
-  std::map<std::string, Template> store_;
+  std::map<std::string, TemplatePtr> store_;
 };
 
-static Template make_template(const std::string &name)
+static TemplatePtr make_template(const std::string &name)
 {
-  return Template(name, RootNode{});
+  return std::make_shared<Template>(name, RootNode{});
 }
 
 static void test_put_and_get()
@@ -75,7 +75,7 @@ static void test_put_and_get()
 
   auto result = cache.get("home");
 
-  assert(result.has_value());
+  assert(result != nullptr);
   assert(result->name() == "home");
 }
 
@@ -96,7 +96,7 @@ static void test_erase()
   cache.put("home", make_template("home"));
   assert(cache.has("home"));
 
-  bool removed = cache.erase("home");
+  const bool removed = cache.erase("home");
   assert(removed);
   assert(!cache.has("home"));
 }
@@ -119,7 +119,7 @@ static void test_get_missing()
   MemoryCache cache;
 
   auto result = cache.get("missing");
-  assert(!result.has_value());
+  assert(result == nullptr);
 }
 
 int main()

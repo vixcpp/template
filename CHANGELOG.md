@@ -8,6 +8,8 @@ This project follows a simple versioning strategy:
 - fixes → patch
 
 ---
+## [0.1.1] - fix(cache)
+- fix(cache): store compiled templates through shared immutable handles instead of copying non-copyable Template objects
 
 ## [0.1.0] - Initial release
 

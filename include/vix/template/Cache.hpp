@@ -17,13 +17,17 @@
 #define VIX_TEMPLATE_CACHE_HPP
 
 #include <memory>
-#include <optional>
 #include <string>
 
 #include <vix/template/Template.hpp>
 
 namespace vix::template_
 {
+  /**
+   * @brief Shared immutable template handle used by the cache.
+   */
+  using TemplatePtr = std::shared_ptr<const Template>;
+
   /**
    * @brief Template cache interface.
    *
@@ -46,20 +50,20 @@ namespace vix::template_
      * @brief Retrieve a cached template.
      *
      * @param name Template name.
-     * @return Cached template if present.
+     * @return Shared immutable template if present, nullptr otherwise.
      */
-    [[nodiscard]] virtual std::optional<Template> get(
+    [[nodiscard]] virtual TemplatePtr get(
         const std::string &name) const = 0;
 
     /**
      * @brief Store a compiled template.
      *
      * @param name Template name.
-     * @param tpl Compiled template.
+     * @param tpl Compiled template handle.
      */
     virtual void put(
         const std::string &name,
-        const Template &tpl) = 0;
+        TemplatePtr tpl) = 0;
 
     /**
      * @brief Remove a template from cache.
