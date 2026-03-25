@@ -8,6 +8,27 @@ This project follows a simple versioning strategy:
 - fixes → patch
 
 ---
+## [v0.2.2]
+
+### Added
+- Add benchmark executables for cache lookup, parsing, and rendering
+- Add initial benchmark results:
+  - cache lookup: ~930 ns per lookup
+  - parsing: ~58.6 µs per parse
+  - rendering: ~19.73 µs per render
+- Add a dedicated `templates/` directory for file-based examples
+
+### Changed
+- Update file-based rendering example to resolve templates from the source `templates/` directory
+- Improve example build configuration for template file loading
+- Reorganize template assets into a clearer project structure
+
+### Removed
+- Remove legacy template files from the old `template/` directory
+
+### Notes
+This release introduces first benchmark visibility and improves the reliability of file-based examples.
+
 ## [v0.2.1]
 
 ### Added

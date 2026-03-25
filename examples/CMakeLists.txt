@@ -82,6 +82,11 @@ target_link_libraries(template_render_file
     vix::template
 )
 
+target_compile_definitions(template_render_file
+  PRIVATE
+    VIX_TEMPLATE_EXAMPLES_DIR="${CMAKE_SOURCE_DIR}/templates"
+)
+
 # ============================================================================
 # Folder (IDE organization)
 # ============================================================================

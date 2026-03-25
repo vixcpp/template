@@ -23,7 +23,7 @@ using namespace vix::template_;
 
 int main()
 {
-  auto loader = std::make_shared<FileSystemLoader>("templates");
+  auto loader = std::make_shared<FileSystemLoader>(VIX_TEMPLATE_EXAMPLES_DIR);
   Engine engine(loader);
 
   Context ctx;
