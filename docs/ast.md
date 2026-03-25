@@ -40,12 +40,12 @@ Represents the entire template.
 
 Structure:
 
-
+```
 RootNode
 ├── Node
 ├── Node
 └── Node
-
+```
 
 Responsibilities:
 
@@ -60,15 +60,15 @@ Represents raw text.
 
 Example:
 
-
+```
 Hello world
-
+```
 
 Becomes:
 
-
+```
 TextNode("Hello world")
-
+```
 
 Rendered directly to output.
 
@@ -80,15 +80,15 @@ Represents variable interpolation.
 
 Example:
 
-
+```
 {{ name }}
-
+```
 
 Becomes:
 
-
+```
 VariableNode("name")
-
+```
 
 Resolved at runtime using Context.
 
@@ -100,16 +100,16 @@ Represents conditional logic.
 
 Example:
 
-
+```
 {% if user %}Hello{% endif %}
-
+```
 
 Becomes:
 
-
+```
 IfNode(condition="user")
 └── TextNode("Hello")
-
+```
 
 Behavior:
 
@@ -124,16 +124,16 @@ Represents iteration over arrays.
 
 Example:
 
-
+```
 {% for item in items %}{{ item }}{% endfor %}
-
+```
 
 Becomes:
 
-
+```
 ForNode(item="item", iterable="items")
 └── VariableNode("item")
-
+```
 
 Behavior:
 
@@ -146,20 +146,20 @@ Behavior:
 
 Template:
 
-
+```
 Hello {{ name }}
 {% if user %}Admin{% endif %}
-
+```
 
 AST:
 
-
+```
 RootNode
 ├── TextNode("Hello ")
 ├── VariableNode("name")
 └── IfNode("user")
-└── TextNode("Admin")
-
+    └── TextNode("Admin")
+```
 
 ---
 
@@ -169,7 +169,7 @@ Nodes are owned using:
 
 ```cpp
 std::unique_ptr<Node>
-``` id="q7ak5p"
+```
 
 Properties:
 
@@ -185,7 +185,7 @@ A NodeList is:
 
 ```cpp
 using NodeList = std::vector<NodePtr>;
-``` id="y29q4m"
+```
 
 Used by:
 
@@ -199,67 +199,78 @@ Used by:
 
 The Renderer walks the AST:
 
-``` id="r2xtq3"
+```
 for each node:
   render_node(node)
+```
 
 Each node defines its behavior:
 
-TextNode → append text
-VariableNode → resolve + output
-IfNode → conditional execution
-ForNode → iterative execution
-Design Principles
-1. Minimal
+- TextNode → append text
+- VariableNode → resolve + output
+- IfNode → conditional execution
+- ForNode → iterative execution
+
+---
+
+## Design Principles
+
+### 1. Minimal
 
 Only essential nodes exist in V1.
 
-2. Deterministic
+### 2. Deterministic
 
 AST contains no dynamic logic.
 All behavior is explicit.
 
-3. Extensible
+### 3. Extensible
 
 Future nodes:
 
-IncludeNode
-BlockNode
-ExtendsNode
-FilterNode
-4. Stable Core
+- IncludeNode
+- BlockNode
+- ExtendsNode
+- FilterNode
+
+### 4. Stable Core
 
 AST is the foundation:
 
-Renderer depends on it
-Compiler will optimize it
-Features will extend it
-Future Evolution
+- Renderer depends on it
+- Compiler will optimize it
+- Features will extend it
+
+---
+
+## Future Evolution
 
 Planned improvements:
 
-Expression Nodes
+### Expression Nodes
+
+```
 {{ user.name }}
 {{ a + b }}
-``` id="c8m9c2"
+```
 
 ---
 
 ### Filter Nodes
 
-
+```
 {{ name | upper }}
-
+```
 
 ---
 
 ### Block System
 
-
+```
 {% block content %}
 ...
 {% endblock %}
-
+```
 
 ---
 
@@ -272,3 +283,4 @@ The AST is:
 - designed for performance and extensibility
 
 It enables Vix to evolve from a basic template engine to a fully optimized rendering system.
+

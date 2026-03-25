@@ -40,10 +40,10 @@ Enable filter syntax inside templates.
 
 ### Example
 
-
+```
 {{ name | upper }}
 {{ items | length }}
-
+```
 
 ### Work Required
 
@@ -68,9 +68,9 @@ Allow template composition.
 
 ### Example
 
-
+```
 {% include "header.html" %}
-
+```
 
 ### Work Required
 
@@ -93,12 +93,12 @@ Support layout systems (Twig/Jinja style).
 
 ### Example
 
-
+```
 {% extends "base.html" %}
 {% block content %}
 ...
 {% endblock %}
-
+```
 
 ### Work Required
 
@@ -121,11 +121,11 @@ Support expressions inside templates.
 
 ### Example
 
-
+```
 {{ user.name }}
 {{ price * quantity }}
 {{ a == b }}
-
+```
 
 ### Work Required
 
@@ -265,3 +265,4 @@ The goal is not to be complex first, but to be:
 - correct
 - fast
 - extensible
+

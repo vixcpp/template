@@ -6,16 +6,13 @@ Rendering is the process of transforming a parsed template (AST) into a final ou
 
 It is handled by the **Renderer**.
 
-
 AST + Context → Renderer → Output
-
 
 ---
 
 ## Rendering Pipeline
 
 The rendering flow is simple and deterministic:
-
 
 Template
 ↓
@@ -24,7 +21,6 @@ RootNode (AST)
 Renderer
 ↓
 Final string output
-
 
 Steps:
 
@@ -61,10 +57,10 @@ Each node type defines its behavior.
 
 Iterates over children:
 
-
+```
 for each child:
-render(child)
-
+  render(child)
+```
 
 ---
 
@@ -72,9 +68,9 @@ render(child)
 
 Appends raw text:
 
-
+```
 output += text
-
+```
 
 ---
 
@@ -87,10 +83,10 @@ Steps:
 3. optionally escape HTML
 4. append to output
 
-
+```
 value = context.get(name)
 output += escape(value)
-
+```
 
 If variable is missing → empty string
 
@@ -104,10 +100,10 @@ Steps:
 2. check truthiness
 3. render body if true
 
-
+```
 if truthy(condition):
-render(body)
-
+  render(body)
+```
 
 ---
 
@@ -120,11 +116,11 @@ Steps:
 3. create scoped context
 4. render body per item
 
-
+```
 for item in iterable:
-context[item_name] = item
-render(body)
-
+  context[item_name] = item
+  render(body)
+```
 
 ---
 
@@ -136,19 +132,19 @@ Example:
 
 ```cpp
 ctx.set("name", "Alice");
-``` id="r0a8"
+```
 
 Template:
 
-
+```
 {{ name }}
-
+```
 
 Output:
 
-
+```
 Alice
-
+```
 
 ---
 
@@ -169,28 +165,28 @@ Otherwise false.
 
 By default, rendering escapes HTML:
 
-
+```
 {{ html }}
-
+```
 
 Input:
 
-
+```
 <b>Hello</b>
-
+```
 
 Output:
 
-
+```
 <b>Hello</b>
-
+```
 
 Controlled via:
 
 ```cpp
 Renderer(true);  // enabled
 Renderer(false); // disabled
-``` id="r0a14"
+```
 
 ---
 
@@ -204,9 +200,9 @@ Rendering errors occur when:
 
 Errors throw:
 
-
+```
 RendererError
-
+```
 
 ---
 
@@ -230,24 +226,24 @@ Key characteristics:
 
 Template:
 
-
+```
 Hello {{ name }}
 {% for item in items %}{{ item }}{% endfor %}
-
+```
 
 Context:
 
 ```cpp
 ctx.set("name", "Alice");
 ctx.set("items", ["A", "B"]);
-``` id="r0a17"
+```
 
 Output:
 
-
+```
 Hello Alice
 AB
-
+```
 
 ---
 
@@ -283,9 +279,9 @@ Planned enhancements:
 
 ### Filters
 
-
+```
 {{ name | upper }}
-
+```
 
 ---
 
@@ -312,3 +308,4 @@ Rendering is:
 - predictable
 
 It is the execution phase of the template engine and is designed for real-world performance and reliability.
+

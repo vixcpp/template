@@ -8,7 +8,27 @@ This project follows a simple versioning strategy:
 - fixes → patch
 
 ---
-## v0.2.0
+## [v0.2.1]
+
+### Added
+- Add full documentation for template engine:
+  - architecture
+  - AST
+  - rendering
+  - syntax
+  - roadmap
+- Add CONTRIBUTING.md with contribution guidelines
+- Add SECURITY.md with vulnerability reporting policy
+- Add CODE_OF_CONDUCT.md
+
+### Changed
+- Improve README with clear usage examples and positioning
+- Refine documentation structure for better developer experience
+
+### Notes
+This release focuses on documentation, clarity, and onboarding experience.
+
+## [v0.2.0]
 
 ### Added
 - Add CMakePresets.json for unified configure/build/test workflows (Ninja + MSVC)

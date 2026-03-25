@@ -6,9 +6,7 @@ The Vix template engine is a deterministic, minimal and high-performance renderi
 
 It follows a strict pipeline:
 
-
 Loader → Lexer → Parser → AST → Compiler → Template → Renderer
-
 
 Each stage is explicit and independent, ensuring:
 - predictable behavior
@@ -42,14 +40,12 @@ Input:
 
 Hello {{ name }}
 
-
 Output:
 
 Text("Hello ")
 VariableOpen
 Identifier("name")
 VariableClose
-
 
 Responsibilities:
 - detect template boundaries (`{{`, `{%`)
@@ -71,16 +67,12 @@ Supported nodes (V1):
 
 Example:
 
-
 {% if user %}Hello{% endif %}
-
 
 Becomes:
 
-
 IfNode(condition="user")
 └── TextNode("Hello")
-
 
 ---
 
@@ -165,28 +157,35 @@ Used during rendering.
 High-level API.
 
 Provides:
+
 ```cpp
 engine.render("home.html", context);
+```
 
 Wraps:
+- Environment
+- Loader
+- Renderer
 
-Environment
-Loader
-Renderer
-10. Cache (optional)
+---
+
+### 10. Cache (optional)
 
 Stores compiled templates.
 
 Goals:
-
-avoid re-parsing
-improve performance
+- avoid re-parsing
+- improve performance
 
 Design:
+- explicit (no implicit eviction)
+- deterministic
 
-explicit (no implicit eviction)
-deterministic
-Data Flow
+---
+
+## Data Flow
+
+```
 [Template File]
       ↓
    Loader
@@ -204,64 +203,85 @@ Data Flow
    Renderer + Context
       ↓
   Final Output (string)
-Design Principles
-1. Deterministic
+```
+
+---
+
+## Design Principles
+
+### 1. Deterministic
 
 No hidden behavior.
 Same input → same output.
 
-2. Explicit
+### 2. Explicit
 
 No magic:
+- no implicit includes
+- no hidden globals
+- no background processes
 
-no implicit includes
-no hidden globals
-no background processes
-3. Minimal
+### 3. Minimal
 
 V1 focuses on:
-
-variables
-if
-for
+- variables
+- if
+- for
 
 Everything else is layered later.
 
-4. Extensible
+### 4. Extensible
 
 Future features:
+- filters (`{{ name | upper }}`)
+- includes
+- template inheritance
+- compiled execution
 
-filters ({{ name | upper }})
-includes
-template inheritance
-compiled execution
-5. Performance-Oriented
-AST reused across renders
-no dynamic reflection
-minimal allocations
-Future Evolution
+### 5. Performance-Oriented
+
+- AST reused across renders
+- no dynamic reflection
+- minimal allocations
+
+---
+
+## Future Evolution
 
 Planned improvements:
 
-Filters
+### Filters
+```
 {{ name | upper }}
-Includes
+```
+
+### Includes
+```
 {% include "header.html" %}
-Layout inheritance
+```
+
+### Layout inheritance
+```
 {% extends "base.html" %}
 {% block content %}
 ...
 {% endblock %}
-Compiler optimizations
-precomputed execution plans
-bytecode-like instructions
-Summary
+```
+
+### Compiler optimizations
+- precomputed execution plans
+- bytecode-like instructions
+
+---
+
+## Summary
 
 The Vix template engine is:
 
-simple by design
-powerful by architecture
-ready for extension
-optimized for real-world systems
+- simple by design
+- powerful by architecture
+- ready for extension
+- optimized for real-world systems
 
 It is built to integrate naturally into the Vix runtime and offline-first systems like Softadastra.
+
