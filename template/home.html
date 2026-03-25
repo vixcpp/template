@@ -1,0 +1,13 @@
+<h2>Welcome {{ name }}</h2>
+
+{% if is_admin %}
+<p>You have admin access.</p>
+{% endif %}
+
+<h3>Your items</h3>
+
+<ul>
+{% for item in items %}
+  <li>{{ item }}</li>
+{% endfor %}
+</ul>
