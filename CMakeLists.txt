@@ -12,7 +12,7 @@ project(template
 
 option(TEMPLATE_BUILD_TESTS "Build template tests" ON)
 option(TEMPLATE_BUILD_EXAMPLES "Build template examples" ON)
-option(TEMPLATE_BUILD_BENCHMARKS "Build template benchmarks" OFF)
+option(TEMPLATE_BUILD_BENCHMARKS "Build template benchmarks" ON)
 option(TEMPLATE_INSTALL "Enable install rules" ON)
 
 # ============================================================================
@@ -36,22 +36,22 @@ endif()
 # ============================================================================
 
 add_library(template
+  src/Builtins.cpp
+  src/Cache.cpp
+  src/Compiler.cpp
+  src/Context.cpp
   src/Engine.cpp
   src/Environment.cpp
+  src/Error.cpp
+  src/Escape.cpp
+  src/FileSystemLoader.cpp
+  src/Lexer.cpp
+  src/Loader.cpp
+  src/Parser.cpp
+  src/Renderer.cpp
+  src/StringLoader.cpp
   src/Template.cpp
   src/Value.cpp
-  src/Context.cpp
-  src/Error.cpp
-  src/Loader.cpp
-  src/FileSystemLoader.cpp
-  src/StringLoader.cpp
-  src/Lexer.cpp
-  src/Parser.cpp
-  src/Compiler.cpp
-  src/Renderer.cpp
-  src/Builtins.cpp
-  src/Escape.cpp
-  src/Cache.cpp
 )
 
 add_library(vix::template ALIAS template)
@@ -69,14 +69,16 @@ target_compile_features(template PUBLIC cxx_std_20)
 # ============================================================================
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  target_compile_options(template PRIVATE
-    -Wall
-    -Wextra
-    -Wpedantic
+  target_compile_options(template
+    PRIVATE
+      -Wall
+      -Wextra
+      -Wpedantic
   )
 elseif(MSVC)
-  target_compile_options(template PRIVATE
-    /W4
+  target_compile_options(template
+    PRIVATE
+      /W4
   )
 endif()
 
@@ -96,23 +98,7 @@ target_compile_definitions(template
 # ============================================================================
 
 if(TEMPLATE_BUILD_EXAMPLES)
-  add_executable(template_basic_render examples/basic_render.cpp)
-  target_link_libraries(template_basic_render PRIVATE vix::template)
-
-  add_executable(template_render_file examples/render_file.cpp)
-  target_link_libraries(template_render_file PRIVATE vix::template)
-
-  add_executable(template_layout_inheritance examples/layout_inheritance.cpp)
-  target_link_libraries(template_layout_inheritance PRIVATE vix::template)
-
-  add_executable(template_includes examples/includes.cpp)
-  target_link_libraries(template_includes PRIVATE vix::template)
-
-  add_executable(template_loops_and_conditions examples/loops_and_conditions.cpp)
-  target_link_libraries(template_loops_and_conditions PRIVATE vix::template)
-
-  add_executable(template_filters examples/filters.cpp)
-  target_link_libraries(template_filters PRIVATE vix::template)
+  add_subdirectory(examples)
 endif()
 
 # ============================================================================

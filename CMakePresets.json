@@ -1,0 +1,99 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "dev-ninja",
+      "displayName": "Dev (Ninja, Debug)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "TEMPLATE_BUILD_TESTS": "ON",
+        "TEMPLATE_BUILD_EXAMPLES": "ON",
+        "TEMPLATE_BUILD_BENCHMARKS": "ON",
+        "TEMPLATE_INSTALL": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release (Ninja, Release)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "TEMPLATE_BUILD_TESTS": "ON",
+        "TEMPLATE_BUILD_EXAMPLES": "ON",
+        "TEMPLATE_BUILD_BENCHMARKS": "ON",
+        "TEMPLATE_INSTALL": "ON"
+      }
+    },
+    {
+      "name": "dev-msvc",
+      "displayName": "Dev (MSVC, Release)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": {
+        "value": "x64"
+      },
+      "binaryDir": "${sourceDir}/build-msvc",
+      "cacheVariables": {
+        "CMAKE_CONFIGURATION_TYPES": "Release",
+        "TEMPLATE_BUILD_TESTS": "ON",
+        "TEMPLATE_BUILD_EXAMPLES": "ON",
+        "TEMPLATE_BUILD_BENCHMARKS": "ON",
+        "TEMPLATE_INSTALL": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "build-ninja",
+      "displayName": "Build (ALL, Ninja Debug)",
+      "configurePreset": "dev-ninja"
+    },
+    {
+      "name": "build-release",
+      "displayName": "Build (ALL, Ninja Release)",
+      "configurePreset": "release"
+    },
+    {
+      "name": "build-msvc",
+      "displayName": "Build (ALL, MSVC)",
+      "configurePreset": "dev-msvc",
+      "configuration": "Release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "test-ninja",
+      "displayName": "Test (Ninja Debug)",
+      "configurePreset": "dev-ninja",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "test-release",
+      "displayName": "Test (Ninja Release)",
+      "configurePreset": "release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "test-msvc",
+      "displayName": "Test (MSVC Release)",
+      "configurePreset": "dev-msvc",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

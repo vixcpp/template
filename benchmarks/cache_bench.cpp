@@ -16,7 +16,7 @@
 #include <chrono>
 #include <iostream>
 #include <map>
-#include <optional>
+#include <memory>
 #include <string>
 
 #include <vix/template/Cache.hpp>
@@ -27,17 +27,19 @@ using namespace vix::template_;
 class MemoryCache : public Cache
 {
 public:
-  std::optional<Template> get(const std::string &name) const override
+  TemplatePtr get(const std::string &name) const override
   {
     const auto it = store_.find(name);
     if (it == store_.end())
-      return std::nullopt;
+    {
+      return nullptr;
+    }
     return it->second;
   }
 
-  void put(const std::string &name, const Template &tpl) override
+  void put(const std::string &name, TemplatePtr tpl) override
   {
-    store_[name] = tpl;
+    store_[name] = std::move(tpl);
   }
 
   bool erase(const std::string &name) override
@@ -56,37 +58,36 @@ public:
   }
 
 private:
-  std::map<std::string, Template> store_;
+  std::map<std::string, TemplatePtr> store_;
 };
 
-static Template make_template(const std::string &name)
+static TemplatePtr make_template(const std::string &name)
 {
-  return Template(name, RootNode{});
+  return std::make_shared<Template>(name, RootNode{});
 }
 
 int main()
 {
   MemoryCache cache;
 
-  const int entries = 1000;
-  const int iterations = 100000;
+  constexpr int entries = 1000;
+  constexpr int iterations = 100000;
 
-  // Fill cache
   for (int i = 0; i < entries; ++i)
   {
     cache.put("tpl_" + std::to_string(i), make_template("tpl"));
   }
 
-  auto start = std::chrono::high_resolution_clock::now();
+  const auto start = std::chrono::high_resolution_clock::now();
 
   for (int i = 0; i < iterations; ++i)
   {
     const std::string key = "tpl_" + std::to_string(i % entries);
-    auto tpl = cache.get(key);
+    TemplatePtr tpl = cache.get(key);
     (void)tpl;
   }
 
-  auto end = std::chrono::high_resolution_clock::now();
+  const auto end = std::chrono::high_resolution_clock::now();
 
   const auto duration =
       std::chrono::duration_cast<std::chrono::milliseconds>(end - start);

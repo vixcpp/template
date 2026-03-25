@@ -8,6 +8,22 @@ This project follows a simple versioning strategy:
 - fixes → patch
 
 ---
+## v0.2.0
+
+### Added
+- Add CMakePresets.json for unified configure/build/test workflows (Ninja + MSVC)
+- Add examples CMake integration with executable targets
+- Add benchmark targets (render, parse, cache)
+
+### Changed
+- Refactor cache usage to support non-copyable Template objects
+- Switch cache storage to shared immutable template handles
+- Improve overall CMake structure with modular subdirectories (tests, examples, benchmarks)
+
+### Fixed
+- Fix build failure caused by copying Template containing unique_ptr
+- Ensure benchmarks and examples are properly included in root build
+
 ## [0.1.1] - fix(cache)
 - fix(cache): store compiled templates through shared immutable handles instead of copying non-copyable Template objects
 
