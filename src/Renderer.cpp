@@ -17,9 +17,9 @@
 #include <vix/template/Compiler.hpp>
 #include <vix/template/Escape.hpp>
 #include <vix/template/Error.hpp>
+#include <vix/template/Template.hpp>
 #include <vix/template/Lexer.hpp>
 #include <vix/template/Parser.hpp>
-#include <vix/template/Template.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -380,7 +380,12 @@ namespace vix::template_
       const Context &context,
       std::string &output) const
   {
-    Value current = evaluate_compiled_expression(instr.expression, context);
+    if (!instr.expression)
+    {
+      throw RendererError("variable instruction contains a null expression");
+    }
+
+    Value current = evaluate_expression(*instr.expression, context);
     current = apply_filters(current, instr.filters);
 
     std::string rendered = current.to_string();
@@ -397,8 +402,14 @@ namespace vix::template_
       std::size_t &instruction_index,
       const Context &context) const
   {
-    const Value condition = evaluate_compiled_expression(
-        instr.expression,
+    if (!instr.expression)
+    {
+      throw RendererError(
+          "conditional jump instruction contains a null expression");
+    }
+
+    const Value condition = evaluate_expression(
+        *instr.expression,
         context);
 
     if (!is_truthy(condition))
@@ -438,33 +449,6 @@ namespace vix::template_
       std::string &output) const
   {
     render_template_by_name(instr.template_name, context, output);
-  }
-
-  Value Renderer::evaluate_compiled_expression(
-      const std::string &expression_text,
-      const Context &context) const
-  {
-    const std::string source = "{{ " + expression_text + " }}";
-
-    Lexer lexer(source);
-    auto tokens = lexer.tokenize();
-
-    Parser parser(std::move(tokens));
-    RootNode root = parser.parse();
-
-    if (root.children().empty() || !root.children().front())
-    {
-      throw RendererError("compiled expression produced an empty AST");
-    }
-
-    const Node &node = *root.children().front();
-    if (node.type() != NodeType::Variable)
-    {
-      throw RendererError("compiled expression did not produce a variable node");
-    }
-
-    const auto &variable = static_cast<const VariableNode &>(node);
-    return evaluate_expression(variable.expression(), context);
   }
 
   Value Renderer::evaluate_expression(
@@ -899,24 +883,23 @@ namespace vix::template_
     try
     {
       const ExtendsNode *extends_node = find_extends(tpl->root());
+
       if (extends_node != nullptr)
       {
-        BlockMap merged = block_overrides_;
-        BlockMap parent_blocks = collect_blocks(tpl->root());
-
-        for (const auto &[name, block] : parent_blocks)
-        {
-          if (merged.find(name) == merged.end())
-          {
-            merged[name] = block;
-          }
-        }
-
         const BlockMap previous = block_overrides_;
-        block_overrides_ = merged;
 
         try
         {
+          BlockMap merged = previous;
+
+          const BlockMap parent_blocks = collect_blocks(tpl->root());
+          for (const auto &[name, block] : parent_blocks)
+          {
+            merged.try_emplace(name, block);
+          }
+
+          block_overrides_ = std::move(merged);
+
           render_template_by_name(
               extends_node->template_name(),
               context,
@@ -932,25 +915,23 @@ namespace vix::template_
       }
       else
       {
-        if (!block_overrides_.empty())
+        if (block_overrides_.empty())
         {
-          RenderResult result = render(tpl->root(), context, block_overrides_);
-          output += result.output;
+          execute_plan(tpl->plan(), context, output);
         }
         else
         {
-          RenderResult result = render(tpl->plan(), context);
-          output += result.output;
+          render_node_list(tpl->root().children(), context, output);
         }
       }
-
-      include_stack_.pop_back();
     }
     catch (...)
     {
       include_stack_.pop_back();
       throw;
     }
+
+    include_stack_.pop_back();
   }
 
   std::shared_ptr<const Template> Renderer::load_template_by_name(

@@ -27,6 +27,7 @@
 #include <vix/template/Cache.hpp>
 #include <vix/template/Context.hpp>
 #include <vix/template/ExecutionPlan.hpp>
+#include <vix/template/Instruction.hpp>
 #include <vix/template/Loader.hpp>
 #include <vix/template/RenderResult.hpp>
 #include <vix/template/Value.hpp>
@@ -47,13 +48,17 @@ namespace vix::template_
    * - cache locality
    *
    * The AST is still used for:
-   * - expression evaluation
+   * - direct evaluation of compiled expressions
    * - include / extends support
    * - block inheritance
    * - future advanced compilation features
    *
    * In V7, Renderer can optionally use a compiled template cache in order
    * to avoid re-loading and re-compiling included templates repeatedly.
+   *
+   * In V8, execution-plan instructions carry compiled expressions directly,
+   * allowing the renderer to evaluate them without reparsing expression text
+   * during rendering.
    */
   class Renderer
   {
@@ -169,6 +174,9 @@ namespace vix::template_
     /**
      * @brief Execute a variable emission instruction.
      *
+     * The instruction already carries a compiled expression, which is
+     * evaluated directly at runtime.
+     *
      * @param instr Variable instruction payload.
      * @param context Runtime rendering context.
      * @param output Output string buffer.
@@ -180,6 +188,8 @@ namespace vix::template_
 
     /**
      * @brief Execute a conditional jump instruction.
+     *
+     * The condition expression is already compiled in the instruction.
      *
      * @param instr Conditional jump payload.
      * @param instruction_index Mutable instruction pointer.
@@ -235,18 +245,10 @@ namespace vix::template_
         std::string &output) const;
 
     /**
-     * @brief Evaluate an expression represented as text.
-     *
-     * @param expression_text Canonical expression string.
-     * @param context Runtime rendering context.
-     * @return Evaluated value.
-     */
-    [[nodiscard]] Value evaluate_compiled_expression(
-        const std::string &expression_text,
-        const Context &context) const;
-
-    /**
      * @brief Evaluate an expression AST node.
+     *
+     * This is the primary evaluation path for expressions stored in the
+     * execution plan.
      *
      * @param expr Expression to evaluate.
      * @param context Runtime rendering context.

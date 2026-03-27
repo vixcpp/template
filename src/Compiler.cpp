@@ -20,195 +20,12 @@
 
 namespace vix::template_
 {
-  namespace
-  {
-    [[nodiscard]] std::string expression_to_string(const Expression &expression)
-    {
-      switch (expression.type())
-      {
-      case ExprType::Name:
-      {
-        const auto &node = static_cast<const NameExpression &>(expression);
-        return node.name();
-      }
-
-      case ExprType::Literal:
-      {
-        const auto &node = static_cast<const LiteralExpression &>(expression);
-        const std::string &value = node.value();
-
-        if (value == "true" || value == "false")
-        {
-          return value;
-        }
-
-        auto is_integer_literal = [](const std::string &text) -> bool
-        {
-          if (text.empty())
-            return false;
-
-          std::size_t index = 0;
-          if (text[index] == '+' || text[index] == '-')
-            ++index;
-
-          if (index >= text.size())
-            return false;
-
-          for (; index < text.size(); ++index)
-          {
-            const char c = text[index];
-            if (c < '0' || c > '9')
-              return false;
-          }
-
-          return true;
-        };
-
-        auto is_floating_literal = [](const std::string &text) -> bool
-        {
-          if (text.empty())
-            return false;
-
-          bool seen_dot = false;
-          std::size_t index = 0;
-
-          if (text[index] == '+' || text[index] == '-')
-            ++index;
-
-          if (index >= text.size())
-            return false;
-
-          for (; index < text.size(); ++index)
-          {
-            const char c = text[index];
-
-            if (c == '.')
-            {
-              if (seen_dot)
-                return false;
-
-              seen_dot = true;
-              continue;
-            }
-
-            if (c < '0' || c > '9')
-              return false;
-          }
-
-          return seen_dot;
-        };
-
-        if (is_integer_literal(value) || is_floating_literal(value))
-        {
-          return value;
-        }
-
-        std::string escaped;
-        escaped.reserve(value.size());
-
-        for (const char c : value)
-        {
-          if (c == '\\' || c == '"')
-            escaped.push_back('\\');
-
-          escaped.push_back(c);
-        }
-
-        return "\"" + escaped + "\"";
-      }
-
-      case ExprType::Member:
-      {
-        const auto &node = static_cast<const MemberExpression &>(expression);
-        return expression_to_string(node.object()) + "." + node.member();
-      }
-
-      case ExprType::Unary:
-      {
-        const auto &node = static_cast<const UnaryExpression &>(expression);
-
-        std::string op;
-        switch (node.op())
-        {
-        case UnaryOperator::Plus:
-          op = "+";
-          break;
-        case UnaryOperator::Minus:
-          op = "-";
-          break;
-        case UnaryOperator::Not:
-          op = "!";
-          break;
-        }
-
-        return op + expression_to_string(node.operand());
-      }
-
-      case ExprType::Binary:
-      {
-        const auto &node = static_cast<const BinaryExpression &>(expression);
-
-        std::string op;
-        switch (node.op())
-        {
-        case BinaryOperator::Add:
-          op = "+";
-          break;
-        case BinaryOperator::Subtract:
-          op = "-";
-          break;
-        case BinaryOperator::Multiply:
-          op = "*";
-          break;
-        case BinaryOperator::Divide:
-          op = "/";
-          break;
-        case BinaryOperator::Modulo:
-          op = "%";
-          break;
-        case BinaryOperator::Equal:
-          op = "==";
-          break;
-        case BinaryOperator::NotEqual:
-          op = "!=";
-          break;
-        case BinaryOperator::Less:
-          op = "<";
-          break;
-        case BinaryOperator::LessEqual:
-          op = "<=";
-          break;
-        case BinaryOperator::Greater:
-          op = ">";
-          break;
-        case BinaryOperator::GreaterEqual:
-          op = ">=";
-          break;
-        case BinaryOperator::And:
-          op = "&&";
-          break;
-        case BinaryOperator::Or:
-          op = "||";
-          break;
-        }
-
-        return "(" + expression_to_string(node.left()) + " " + op + " " +
-               expression_to_string(node.right()) + ")";
-      }
-      }
-
-      throw std::runtime_error("unknown expression type");
-    }
-
-  } // namespace
-
   Template Compiler::compile(
       std::string name,
       RootNode root,
       std::shared_ptr<Loader> loader,
       std::string source_signature) const
   {
-    // ✅ V7: utiliser optimizer_ membre
     RootNode optimized = optimizer_.optimize(std::move(root));
 
     ExecutionPlan plan = build_plan(optimized);
@@ -236,7 +53,9 @@ namespace vix::template_
     for (const auto &node : nodes)
     {
       if (!node)
+      {
         continue;
+      }
 
       compile_node(*node, plan);
     }
@@ -288,7 +107,9 @@ namespace vix::template_
       ExecutionPlan &plan) const
   {
     if (node.value().empty())
+    {
       return;
+    }
 
     plan.emplace(OpCode::EmitText, TextInstr{node.value()});
   }
@@ -300,7 +121,7 @@ namespace vix::template_
     plan.emplace(
         OpCode::EmitVariable,
         VariableInstr{
-            expression_to_string(node.expression()),
+            clone_expression(node.expression()),
             node.filters()});
   }
 
@@ -308,25 +129,25 @@ namespace vix::template_
       const IfNode &node,
       ExecutionPlan &plan) const
   {
-    const std::size_t jumpIndex = plan.size();
+    const std::size_t jump_index = plan.size();
 
     plan.emplace(
         OpCode::JumpIfFalse,
         JumpIfFalseInstr{
-            expression_to_string(node.condition()),
+            clone_expression(node.condition()),
             0});
 
     compile_nodes(node.body(), plan);
 
-    auto &jumpInstr = std::get<JumpIfFalseInstr>(plan.at(jumpIndex).data);
-    jumpInstr.target = plan.size();
+    auto &jump_instr = std::get<JumpIfFalseInstr>(plan.at(jump_index).data);
+    jump_instr.target = plan.size();
   }
 
   void Compiler::compile_for(
       const ForNode &node,
       ExecutionPlan &plan) const
   {
-    const std::size_t beginIndex = plan.size();
+    const std::size_t begin_index = plan.size();
 
     plan.emplace(
         OpCode::ForEachBegin,
@@ -339,10 +160,10 @@ namespace vix::template_
 
     plan.emplace(
         OpCode::ForEachEnd,
-        JumpInstr{beginIndex});
+        JumpInstr{begin_index});
 
-    auto &beginInstr = std::get<ForEachInstr>(plan.at(beginIndex).data);
-    beginInstr.jump_end = plan.size();
+    auto &begin_instr = std::get<ForEachInstr>(plan.at(begin_index).data);
+    begin_instr.jump_end = plan.size();
   }
 
   void Compiler::compile_include(
@@ -359,6 +180,88 @@ namespace vix::template_
       ExecutionPlan &plan) const
   {
     compile_nodes(node.body(), plan);
+  }
+
+  CompiledExprPtr Compiler::clone_expression(
+      const Expression &expression) const
+  {
+    ExprPtr cloned = clone_expression_node(expression);
+
+    if (!cloned)
+    {
+      throw std::runtime_error("failed to clone expression");
+    }
+
+    return CompiledExprPtr(cloned.release());
+  }
+
+  ExprPtr Compiler::clone_expression_node(
+      const Expression &expression) const
+  {
+    switch (expression.type())
+    {
+    case ExprType::Name:
+    {
+      const auto &node = static_cast<const NameExpression &>(expression);
+      return std::make_unique<NameExpression>(node.name());
+    }
+
+    case ExprType::Literal:
+    {
+      const auto &node = static_cast<const LiteralExpression &>(expression);
+      return std::make_unique<LiteralExpression>(node.value());
+    }
+
+    case ExprType::Member:
+    {
+      const auto &node = static_cast<const MemberExpression &>(expression);
+
+      ExprPtr object = clone_expression_node(node.object());
+      if (!object)
+      {
+        throw std::runtime_error("failed to clone member expression object");
+      }
+
+      return std::make_unique<MemberExpression>(
+          std::move(object),
+          node.member());
+    }
+
+    case ExprType::Unary:
+    {
+      const auto &node = static_cast<const UnaryExpression &>(expression);
+
+      ExprPtr operand = clone_expression_node(node.operand());
+      if (!operand)
+      {
+        throw std::runtime_error("failed to clone unary expression operand");
+      }
+
+      return std::make_unique<UnaryExpression>(
+          node.op(),
+          std::move(operand));
+    }
+
+    case ExprType::Binary:
+    {
+      const auto &node = static_cast<const BinaryExpression &>(expression);
+
+      ExprPtr left = clone_expression_node(node.left());
+      ExprPtr right = clone_expression_node(node.right());
+
+      if (!left || !right)
+      {
+        throw std::runtime_error("failed to clone binary expression operands");
+      }
+
+      return std::make_unique<BinaryExpression>(
+          std::move(left),
+          node.op(),
+          std::move(right));
+    }
+    }
+
+    throw std::runtime_error("unknown expression type");
   }
 
 } // namespace vix::template_

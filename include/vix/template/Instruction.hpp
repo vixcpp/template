@@ -16,14 +16,28 @@
 #ifndef VIX_TEMPLATE_INSTRUCTION_HPP
 #define VIX_TEMPLATE_INSTRUCTION_HPP
 
-#include <string>
-#include <variant>
 #include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
+#include <variant>
 #include <vector>
+
 #include <vix/template/AST.hpp>
 
 namespace vix::template_
 {
+  /**
+   * @brief Shared compiled expression pointer used by the execution plan.
+   *
+   * The execution plan must keep expressions in compiled form so the renderer
+   * can evaluate them directly at runtime without reparsing expression text.
+   *
+   * Shared ownership is used here to keep Instruction copyable and movable
+   * while still storing precompiled expression trees.
+   */
+  using CompiledExprPtr = std::shared_ptr<const Expression>;
+
   /**
    * @brief Enumeration of all instruction types used by the execution plan.
    *
@@ -80,27 +94,41 @@ namespace vix::template_
    */
   struct TextInstr
   {
+    /**
+     * @brief Literal text emitted directly to output.
+     */
     std::string text;
   };
 
   /**
    * @brief Payload for EmitVariable instruction.
    *
-   * Stores the variable name to resolve at runtime.
+   * Stores the already compiled expression to evaluate at runtime.
+   * This avoids reparsing the variable expression during rendering.
    */
   struct VariableInstr
   {
-    std::string expression;
+    /**
+     * @brief Precompiled expression to evaluate.
+     */
+    CompiledExprPtr expression;
+
+    /**
+     * @brief Filter pipeline applied after expression evaluation.
+     */
     std::vector<FilterNode> filters;
   };
 
   /**
    * @brief Payload for jump instructions.
    *
-   * Offset represents the index to jump to in the instruction list.
+   * Target represents the index to jump to in the instruction list.
    */
   struct JumpInstr
   {
+    /**
+     * @brief Destination instruction index.
+     */
     std::size_t target{0};
   };
 
@@ -111,20 +139,38 @@ namespace vix::template_
    */
   struct ForEachInstr
   {
+    /**
+     * @brief Iterable variable name resolved at runtime.
+     */
     std::string iterable_name;
+
+    /**
+     * @brief Loop item variable name bound for each iteration.
+     */
     std::string item_name;
+
+    /**
+     * @brief Instruction index to jump to when the loop ends.
+     */
     std::size_t jump_end{0};
   };
 
   /**
    * @brief Payload for conditional jump instructions.
    *
-   * The expression is evaluated at runtime.
-   * If the result is falsy, execution jumps to target.
+   * The condition is stored in compiled form and evaluated directly
+   * at runtime. If the result is falsy, execution jumps to target.
    */
   struct JumpIfFalseInstr
   {
-    std::string expression;
+    /**
+     * @brief Precompiled condition expression.
+     */
+    CompiledExprPtr expression;
+
+    /**
+     * @brief Destination instruction index when condition is false.
+     */
     std::size_t target{0};
   };
 
@@ -133,6 +179,9 @@ namespace vix::template_
    */
   struct IncludeInstr
   {
+    /**
+     * @brief Logical template name to include.
+     */
     std::string template_name;
   };
 

@@ -21,6 +21,7 @@
 
 #include <vix/template/AST.hpp>
 #include <vix/template/ExecutionPlan.hpp>
+#include <vix/template/Instruction.hpp>
 #include <vix/template/Loader.hpp>
 #include <vix/template/Optimizer.hpp>
 #include <vix/template/Template.hpp>
@@ -48,6 +49,9 @@ namespace vix::template_
    * - faster rendering
    * - better CPU cache locality
    * - compiled template caching in V7
+   *
+   * In V8, expressions stored in instructions are kept in compiled form
+   * so the renderer can evaluate them directly without reparsing text.
    */
   class Compiler
   {
@@ -160,6 +164,30 @@ namespace vix::template_
     void compile_block(
         const BlockNode &node,
         ExecutionPlan &plan) const;
+
+    /**
+     * @brief Clone an expression tree into a shared compiled form.
+     *
+     * Instructions store shared compiled expressions so they remain
+     * copyable and cheap to move while avoiding expression reparsing
+     * during rendering.
+     *
+     * @param expression Expression AST to clone.
+     * @return Shared pointer to an immutable compiled expression tree.
+     */
+    [[nodiscard]] CompiledExprPtr clone_expression(
+        const Expression &expression) const;
+
+    /**
+     * @brief Clone an expression tree into a unique expression node.
+     *
+     * This helper performs the recursive deep copy of the expression AST.
+     *
+     * @param expression Expression AST to clone.
+     * @return Deep-copied unique expression node.
+     */
+    [[nodiscard]] ExprPtr clone_expression_node(
+        const Expression &expression) const;
 
   private:
     /**

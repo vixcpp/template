@@ -1,5 +1,79 @@
 # Changelog
 
+## v0.8.0
+
+Make rendering truly compiled by eliminating runtime expression parsing.
+
+### Highlights
+
+V8 turns the execution plan into a real compiled runtime by removing expression reparsing during rendering.
+
+Expressions are now compiled once and evaluated directly, unlocking major performance gains across the entire rendering pipeline.
+
+### Features
+
+- Compile expressions into instructions
+  - `VariableInstr` now stores compiled expressions
+  - `JumpIfFalseInstr` uses compiled conditions
+- Remove runtime expression parsing
+  - no more Lexer/Parser during render
+  - direct evaluation from execution plan
+- Improve execution plan efficiency
+  - fully compiled rendering path
+  - better CPU cache locality
+
+### Performance Improvements
+
+- Variable rendering: ~2.5x faster
+- Expression rendering: ~4x faster
+- Conditional rendering (`if`): ~4x faster
+- Loops: ~2x faster
+- Mixed templates: ~2x faster
+- Engine cached templates: ~3–4x faster
+
+Rendering performance now exceeds V6 across most scenarios.
+
+### Renderer Improvements
+
+- Remove `evaluate_compiled_expression(std::string, ...)`
+- Use `evaluate_expression(Expression, ...)` directly
+- Avoid temporary parsing structures during execution
+- Optimize `render_template_by_name()`:
+  - reduce allocations
+  - avoid unnecessary `RenderResult` copies
+  - use `execute_plan()` directly on fast path
+
+### Compiler Improvements
+
+- Add deep cloning of expression AST
+- Store compiled expressions inside execution plan
+- Remove `expression_to_string()` path
+
+### Performance Notes
+
+- Core rendering path is now significantly faster than V6
+- Include and template composition still remain the main bottleneck
+- Cache lookup remains sub-microsecond
+
+### Why this release matters
+
+V6 introduced execution plans.
+V7 introduced correctness (cache + inheritance).
+
+V8 completes the model:
+
+- no runtime parsing
+- true compiled execution
+- predictable performance
+
+This version marks the transition from a partially compiled engine to a fully compiled template runtime.
+
+### Next Focus
+
+- Optimize include and template composition
+- Reduce loader and cache overhead
+- Further improve inheritance execution path
+
 ## v0.7.0
 
 Add cache-aware template freshness and safer inheritance rendering.
