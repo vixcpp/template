@@ -21,6 +21,7 @@
 
 #include <vix/template/Compiler.hpp>
 #include <vix/template/Context.hpp>
+#include <vix/template/Engine.hpp>
 #include <vix/template/Lexer.hpp>
 #include <vix/template/Parser.hpp>
 #include <vix/template/StringLoader.hpp>
@@ -35,6 +36,9 @@ namespace
       const std::string &source,
       std::shared_ptr<Loader> loader = nullptr)
   {
+    const std::string signature =
+        loader ? loader->source_signature(name) : std::string{};
+
     Lexer lexer(source);
     auto tokens = lexer.tokenize();
 
@@ -42,7 +46,11 @@ namespace
     RootNode root = parser.parse();
 
     Compiler compiler;
-    return compiler.compile(name, std::move(root), std::move(loader));
+    return compiler.compile(
+        name,
+        std::move(root),
+        std::move(loader),
+        std::move(signature));
   }
 
   [[nodiscard]] Context make_basic_context()
@@ -85,8 +93,7 @@ static void BM_render_plain_text(benchmark::State &state)
     benchmark::DoNotOptimize(result.output);
   }
 
-  state.SetItemsProcessed(
-      static_cast<std::int64_t>(state.iterations()));
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
 }
 BENCHMARK(BM_render_plain_text);
 
@@ -103,8 +110,7 @@ static void BM_render_variable(benchmark::State &state)
     benchmark::DoNotOptimize(result.output);
   }
 
-  state.SetItemsProcessed(
-      static_cast<std::int64_t>(state.iterations()));
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
 }
 BENCHMARK(BM_render_variable);
 
@@ -121,8 +127,7 @@ static void BM_render_expression(benchmark::State &state)
     benchmark::DoNotOptimize(result.output);
   }
 
-  state.SetItemsProcessed(
-      static_cast<std::int64_t>(state.iterations()));
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
 }
 BENCHMARK(BM_render_expression);
 
@@ -139,8 +144,7 @@ static void BM_render_if(benchmark::State &state)
     benchmark::DoNotOptimize(result.output);
   }
 
-  state.SetItemsProcessed(
-      static_cast<std::int64_t>(state.iterations()));
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
 }
 BENCHMARK(BM_render_if);
 
@@ -157,8 +161,7 @@ static void BM_render_for_loop(benchmark::State &state)
     benchmark::DoNotOptimize(result.output);
   }
 
-  state.SetItemsProcessed(
-      static_cast<std::int64_t>(state.iterations()));
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
 }
 BENCHMARK(BM_render_for_loop);
 
@@ -180,8 +183,7 @@ static void BM_render_mixed_template(benchmark::State &state)
     benchmark::DoNotOptimize(result.output);
   }
 
-  state.SetItemsProcessed(
-      static_cast<std::int64_t>(state.iterations()));
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
 }
 BENCHMARK(BM_render_mixed_template);
 
@@ -189,11 +191,15 @@ static void BM_render_include(benchmark::State &state)
 {
   auto loader = std::make_shared<StringLoader>();
   loader->set("header.html", "Header {{ name }}\n");
-  loader->set("body.html", "{% include \"header.html\" %}Total: {{ price * quantity }}");
+  loader->set(
+      "body.html",
+      "{% include \"header.html\" %}Total: {{ price * quantity }}");
+
   const Template tpl = compile_template(
       "include_template",
       "{% include \"body.html\" %}",
       loader);
+
   const Context ctx = make_basic_context();
 
   for (auto _ : state)
@@ -202,9 +208,81 @@ static void BM_render_include(benchmark::State &state)
     benchmark::DoNotOptimize(result.output);
   }
 
-  state.SetItemsProcessed(
-      static_cast<std::int64_t>(state.iterations()));
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
 }
 BENCHMARK(BM_render_include);
+
+static void BM_render_engine_cached_template(benchmark::State &state)
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set(
+      "profile.html",
+      "Hello {{ user.name }}\n"
+      "{% if enabled %}Role: {{ user.role }}{% endif %}");
+
+  Engine engine(loader);
+  const Context ctx = make_basic_context();
+
+  for (auto _ : state)
+  {
+    const RenderResult result = engine.render("profile.html", ctx);
+    benchmark::DoNotOptimize(result.output);
+  }
+
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_engine_cached_template);
+
+static void BM_render_engine_cached_include(benchmark::State &state)
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set("header.html", "Header {{ name }}\n");
+  loader->set(
+      "body.html",
+      "{% include \"header.html\" %}Total: {{ price * quantity }}");
+  loader->set(
+      "page.html",
+      "{% include \"body.html\" %}\n"
+      "{% for item in items %}[{{ item | upper }}]{% endfor %}");
+
+  Engine engine(loader);
+  const Context ctx = make_basic_context();
+
+  for (auto _ : state)
+  {
+    const RenderResult result = engine.render("page.html", ctx);
+    benchmark::DoNotOptimize(result.output);
+  }
+
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_engine_cached_include);
+
+static void BM_render_engine_no_cache_include(benchmark::State &state)
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set("header.html", "Header {{ name }}\n");
+  loader->set(
+      "body.html",
+      "{% include \"header.html\" %}Total: {{ price * quantity }}");
+  loader->set(
+      "page.html",
+      "{% include \"body.html\" %}\n"
+      "{% for item in items %}[{{ item | upper }}]{% endfor %}");
+
+  Engine engine(loader);
+  engine.set_cache_enabled(false);
+
+  const Context ctx = make_basic_context();
+
+  for (auto _ : state)
+  {
+    const RenderResult result = engine.render("page.html", ctx);
+    benchmark::DoNotOptimize(result.output);
+  }
+
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_engine_no_cache_include);
 
 BENCHMARK_MAIN();

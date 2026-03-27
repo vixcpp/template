@@ -16,8 +16,8 @@
 #include <vix/template/Template.hpp>
 #include <vix/template/Renderer.hpp>
 
-#include <utility>
 #include <algorithm>
+#include <utility>
 
 namespace vix::template_
 {
@@ -25,11 +25,13 @@ namespace vix::template_
       std::string name,
       RootNode root,
       ExecutionPlan plan,
-      std::shared_ptr<Loader> loader)
+      std::shared_ptr<Loader> loader,
+      std::string source_signature)
       : name_(std::move(name)),
         root_(std::move(root)),
         plan_(std::move(plan)),
-        loader_(std::move(loader))
+        loader_(std::move(loader)),
+        source_signature_(std::move(source_signature))
   {
   }
 
@@ -79,6 +81,16 @@ namespace vix::template_
   const std::shared_ptr<Loader> &Template::loader() const noexcept
   {
     return loader_;
+  }
+
+  const std::string &Template::source_signature() const noexcept
+  {
+    return source_signature_;
+  }
+
+  void Template::set_source_signature(std::string source_signature)
+  {
+    source_signature_ = std::move(source_signature);
   }
 
 } // namespace vix::template_

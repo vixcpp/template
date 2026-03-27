@@ -27,6 +27,8 @@ namespace vix::template_
    *
    * FileSystemLoader resolves template names to files on disk.
    * It is typically used in production to load templates from a directory.
+   *
+   * In V7, it can also expose a source signature for cache invalidation.
    */
   class FileSystemLoader : public Loader
   {
@@ -55,6 +57,19 @@ namespace vix::template_
      * @return True if the file exists.
      */
     [[nodiscard]] bool exists(const std::string &name) const override;
+
+    /**
+     * @brief Compute a freshness signature for a template file.
+     *
+     * The returned string is intended for compiled template cache
+     * invalidation. A typical implementation may use the file last write
+     * timestamp, file size, or both.
+     *
+     * @param name Template name or relative path.
+     * @return Source signature, or empty string if unavailable.
+     */
+    [[nodiscard]] std::string source_signature(
+        const std::string &name) const override;
 
     /**
      * @brief Get the root directory.

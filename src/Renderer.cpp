@@ -14,10 +14,12 @@
  *
  */
 #include <vix/template/Renderer.hpp>
+#include <vix/template/Compiler.hpp>
 #include <vix/template/Escape.hpp>
 #include <vix/template/Error.hpp>
 #include <vix/template/Lexer.hpp>
 #include <vix/template/Parser.hpp>
+#include <vix/template/Template.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -112,10 +114,12 @@ namespace vix::template_
 
   Renderer::Renderer(
       bool auto_escape_html,
-      std::shared_ptr<Loader> loader)
+      std::shared_ptr<Loader> loader,
+      Cache *cache)
       : auto_escape_html_(auto_escape_html),
         filters_(Builtins::filters()),
-        loader_(std::move(loader))
+        loader_(std::move(loader)),
+        cache_(cache)
   {
   }
 
@@ -878,9 +882,10 @@ namespace vix::template_
       const Context &context,
       std::string &output) const
   {
-    if (!loader_)
+    auto tpl = load_template_by_name(template_name);
+    if (!tpl)
     {
-      throw RendererError("template loading requires a configured loader");
+      throw RendererError("template not found: " + template_name);
     }
 
     if (is_in_include_stack(template_name))
@@ -889,28 +894,15 @@ namespace vix::template_
           "circular template inheritance/include detected: " + template_name);
     }
 
-    if (!loader_->exists(template_name))
-    {
-      throw RendererError("template not found: " + template_name);
-    }
-
     include_stack_.push_back(template_name);
 
     try
     {
-      const std::string source = loader_->load(template_name);
-
-      Lexer lexer(source);
-      auto tokens = lexer.tokenize();
-
-      Parser parser(std::move(tokens));
-      RootNode root = parser.parse();
-
-      const ExtendsNode *extends_node = find_extends(root);
+      const ExtendsNode *extends_node = find_extends(tpl->root());
       if (extends_node != nullptr)
       {
         BlockMap merged = block_overrides_;
-        BlockMap parent_blocks = collect_blocks(root);
+        BlockMap parent_blocks = collect_blocks(tpl->root());
 
         for (const auto &[name, block] : parent_blocks)
         {
@@ -940,7 +932,16 @@ namespace vix::template_
       }
       else
       {
-        render_node_list(root.children(), context, output);
+        if (!block_overrides_.empty())
+        {
+          RenderResult result = render(tpl->root(), context, block_overrides_);
+          output += result.output;
+        }
+        else
+        {
+          RenderResult result = render(tpl->plan(), context);
+          output += result.output;
+        }
       }
 
       include_stack_.pop_back();
@@ -950,6 +951,62 @@ namespace vix::template_
       include_stack_.pop_back();
       throw;
     }
+  }
+
+  std::shared_ptr<const Template> Renderer::load_template_by_name(
+      const std::string &template_name) const
+  {
+    if (!loader_)
+    {
+      throw RendererError("template loading requires a configured loader");
+    }
+
+    if (!loader_->exists(template_name))
+    {
+      return nullptr;
+    }
+
+    const std::string source_signature = make_source_signature(template_name);
+
+    if (cache_ != nullptr)
+    {
+      if (auto cached = cache_->get(template_name, source_signature))
+      {
+        return cached;
+      }
+    }
+
+    const std::string source = loader_->load(template_name);
+
+    Lexer lexer(source);
+    auto tokens = lexer.tokenize();
+
+    Parser parser(std::move(tokens));
+    RootNode root = parser.parse();
+
+    Compiler compiler;
+    Template compiled = compiler.compile(
+        template_name,
+        std::move(root),
+        loader_,
+        source_signature);
+
+    auto shared_compiled =
+        std::make_shared<Template>(std::move(compiled));
+
+    if (cache_ != nullptr)
+    {
+      cache_->put(template_name, shared_compiled, source_signature);
+    }
+
+    return shared_compiled;
+  }
+
+  std::string Renderer::make_source_signature(
+      const std::string &template_name) const
+  {
+    (void)template_name;
+    return {};
   }
 
   void Renderer::render_block(

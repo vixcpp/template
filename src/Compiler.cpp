@@ -22,15 +22,6 @@ namespace vix::template_
 {
   namespace
   {
-    /**
-     * @brief Convert an expression AST into a stable textual form.
-     *
-     * This is used in V6 as an intermediate compiled representation for
-     * expression-driven instructions.
-     *
-     * @param expression Expression to stringify.
-     * @return Canonical textual representation.
-     */
     [[nodiscard]] std::string expression_to_string(const Expression &expression)
     {
       switch (expression.type())
@@ -54,28 +45,20 @@ namespace vix::template_
         auto is_integer_literal = [](const std::string &text) -> bool
         {
           if (text.empty())
-          {
             return false;
-          }
 
           std::size_t index = 0;
           if (text[index] == '+' || text[index] == '-')
-          {
             ++index;
-          }
 
           if (index >= text.size())
-          {
             return false;
-          }
 
           for (; index < text.size(); ++index)
           {
             const char c = text[index];
             if (c < '0' || c > '9')
-            {
               return false;
-            }
           }
 
           return true;
@@ -84,41 +67,32 @@ namespace vix::template_
         auto is_floating_literal = [](const std::string &text) -> bool
         {
           if (text.empty())
-          {
             return false;
-          }
 
           bool seen_dot = false;
           std::size_t index = 0;
 
           if (text[index] == '+' || text[index] == '-')
-          {
             ++index;
-          }
 
           if (index >= text.size())
-          {
             return false;
-          }
 
           for (; index < text.size(); ++index)
           {
             const char c = text[index];
+
             if (c == '.')
             {
               if (seen_dot)
-              {
                 return false;
-              }
 
               seen_dot = true;
               continue;
             }
 
             if (c < '0' || c > '9')
-            {
               return false;
-            }
           }
 
           return seen_dot;
@@ -135,15 +109,14 @@ namespace vix::template_
         for (const char c : value)
         {
           if (c == '\\' || c == '"')
-          {
             escaped.push_back('\\');
-          }
 
           escaped.push_back(c);
         }
 
         return "\"" + escaped + "\"";
       }
+
       case ExprType::Member:
       {
         const auto &node = static_cast<const MemberExpression &>(expression);
@@ -232,17 +205,20 @@ namespace vix::template_
   Template Compiler::compile(
       std::string name,
       RootNode root,
-      std::shared_ptr<Loader> loader) const
+      std::shared_ptr<Loader> loader,
+      std::string source_signature) const
   {
-    Optimizer optimizer;
-    RootNode optimized = optimizer.optimize(std::move(root));
+    // ✅ V7: utiliser optimizer_ membre
+    RootNode optimized = optimizer_.optimize(std::move(root));
+
     ExecutionPlan plan = build_plan(optimized);
 
     return Template(
         std::move(name),
         std::move(optimized),
         std::move(plan),
-        std::move(loader));
+        std::move(loader),
+        std::move(source_signature));
   }
 
   ExecutionPlan Compiler::build_plan(const RootNode &root) const
@@ -260,9 +236,7 @@ namespace vix::template_
     for (const auto &node : nodes)
     {
       if (!node)
-      {
         continue;
-      }
 
       compile_node(*node, plan);
     }
@@ -299,7 +273,6 @@ namespace vix::template_
       return;
 
     case NodeType::Extends:
-      // Extends is handled at a higher composition level.
       return;
 
     case NodeType::Root:
@@ -315,9 +288,7 @@ namespace vix::template_
       ExecutionPlan &plan) const
   {
     if (node.value().empty())
-    {
       return;
-    }
 
     plan.emplace(OpCode::EmitText, TextInstr{node.value()});
   }

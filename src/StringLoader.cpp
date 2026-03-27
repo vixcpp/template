@@ -17,6 +17,7 @@
 #include <vix/template/Error.hpp>
 
 #include <utility>
+#include <functional>
 
 namespace vix::template_
 {
@@ -39,6 +40,23 @@ namespace vix::template_
   bool StringLoader::exists(const std::string &name) const
   {
     return templates_.find(name) != templates_.end();
+  }
+
+  std::string StringLoader::source_signature(
+      const std::string &name) const
+  {
+    const auto it = templates_.find(name);
+    if (it == templates_.end())
+    {
+      return {};
+    }
+
+    // 🔥 hash léger du contenu
+    const std::string &content = it->second;
+
+    std::size_t hash = std::hash<std::string>{}(content);
+
+    return std::to_string(hash);
   }
 
 } // namespace vix::template_

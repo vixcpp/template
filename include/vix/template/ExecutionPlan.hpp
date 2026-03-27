@@ -37,6 +37,9 @@ namespace vix::template_
    *
    * The Renderer consumes this plan sequentially and applies jumps when
    * control-flow instructions require it.
+   *
+   * In V7, ExecutionPlan is also the primary compiled artifact stored in
+   * the template cache through the owning Template object.
    */
   class ExecutionPlan
   {
@@ -145,6 +148,46 @@ namespace vix::template_
     }
 
     /**
+     * @brief Get the first instruction.
+     *
+     * @return Immutable first instruction.
+     */
+    [[nodiscard]] const Instruction &front() const
+    {
+      return instructions_.front();
+    }
+
+    /**
+     * @brief Get the first instruction.
+     *
+     * @return Mutable first instruction.
+     */
+    [[nodiscard]] Instruction &front()
+    {
+      return instructions_.front();
+    }
+
+    /**
+     * @brief Get the last instruction.
+     *
+     * @return Immutable last instruction.
+     */
+    [[nodiscard]] const Instruction &back() const
+    {
+      return instructions_.back();
+    }
+
+    /**
+     * @brief Get the last instruction.
+     *
+     * @return Mutable last instruction.
+     */
+    [[nodiscard]] Instruction &back()
+    {
+      return instructions_.back();
+    }
+
+    /**
      * @brief Check whether the plan is empty.
      *
      * @return True if there are no instructions.
@@ -165,6 +208,16 @@ namespace vix::template_
     }
 
     /**
+     * @brief Get the current reserved capacity.
+     *
+     * @return Underlying vector capacity.
+     */
+    [[nodiscard]] std::size_t capacity() const noexcept
+    {
+      return instructions_.capacity();
+    }
+
+    /**
      * @brief Reserve storage for instructions.
      *
      * @param count Desired capacity.
@@ -172,6 +225,16 @@ namespace vix::template_
     void reserve(std::size_t count)
     {
       instructions_.reserve(count);
+    }
+
+    /**
+     * @brief Shrink capacity to fit the current size.
+     *
+     * Useful after compilation when the plan becomes immutable in practice.
+     */
+    void shrink_to_fit()
+    {
+      instructions_.shrink_to_fit();
     }
 
     /**

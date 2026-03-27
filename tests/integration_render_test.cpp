@@ -62,7 +62,6 @@ static void test_home_template_full_render()
   const RenderResult result = engine.render("home", ctx);
 
   assert(result.success);
-  assert(!result.from_cache);
   assert(result.escaped);
   assert(
       result.output ==
@@ -87,7 +86,6 @@ static void test_home_template_without_admin()
   const RenderResult result = engine.render("home", ctx);
 
   assert(result.success);
-  assert(!result.from_cache);
   assert(result.escaped);
   assert(
       result.output ==
@@ -106,7 +104,6 @@ static void test_profile_template_with_escape()
   const RenderResult result = engine.render("profile", ctx);
 
   assert(result.success);
-  assert(!result.from_cache);
   assert(result.escaped);
   assert(
       result.output ==
@@ -124,7 +121,6 @@ static void test_empty_loop_render()
   const RenderResult result = engine.render("empty_loop", ctx);
 
   assert(result.success);
-  assert(!result.from_cache);
   assert(result.escaped);
   assert(result.output == "StartEnd");
 }
@@ -140,12 +136,87 @@ static void test_render_with_object_context()
   const RenderResult result = engine.render("profile", Context(values));
 
   assert(result.success);
-  assert(!result.from_cache);
   assert(result.escaped);
   assert(
       result.output ==
       "User: adastra\n"
       "Bio: offline-first");
+}
+
+static void test_second_render_uses_cache()
+{
+  auto loader = make_loader();
+  Engine engine(loader);
+
+  Context ctx;
+  ctx.set("username", "gaspard");
+  ctx.set("bio", "builder");
+
+  const RenderResult first = engine.render("profile", ctx);
+  const RenderResult second = engine.render("profile", ctx);
+
+  assert(first.success);
+  assert(second.success);
+
+  assert(first.output == "User: gaspard\nBio: builder");
+  assert(second.output == "User: gaspard\nBio: builder");
+
+  assert(!first.from_cache);
+  assert(second.from_cache);
+}
+
+static void test_cache_invalidation_after_template_update()
+{
+  auto loader = make_loader();
+  Engine engine(loader);
+
+  Context ctx;
+  ctx.set("username", "gaspard");
+  ctx.set("bio", "builder");
+
+  const RenderResult first = engine.render("profile", ctx);
+  assert(first.success);
+  assert(first.output == "User: gaspard\nBio: builder");
+
+  loader->set(
+      "profile",
+      "Account: {{ username }}\n"
+      "About: {{ bio }}");
+
+  const RenderResult second = engine.render("profile", ctx);
+
+  assert(second.success);
+  assert(second.escaped);
+  assert(
+      second.output ==
+      "Account: gaspard\n"
+      "About: builder");
+
+  assert(!second.from_cache);
+}
+
+static void test_cache_can_be_disabled()
+{
+  auto loader = make_loader();
+  Engine engine(loader);
+  engine.set_cache_enabled(false);
+
+  Context ctx;
+  ctx.set("username", "gaspard");
+  ctx.set("bio", "builder");
+
+  const RenderResult first = engine.render("profile", ctx);
+  const RenderResult second = engine.render("profile", ctx);
+
+  assert(first.success);
+  assert(second.success);
+
+  assert(first.output == "User: gaspard\nBio: builder");
+  assert(second.output == "User: gaspard\nBio: builder");
+
+  assert(!first.from_cache);
+  assert(!second.from_cache);
+  assert(engine.cache().empty());
 }
 
 int main()
@@ -155,6 +226,9 @@ int main()
   test_profile_template_with_escape();
   test_empty_loop_render();
   test_render_with_object_context();
+  test_second_render_uses_cache();
+  test_cache_invalidation_after_template_update();
+  test_cache_can_be_disabled();
 
   std::cout << "[OK] template integration render tests passed\n";
   return 0;

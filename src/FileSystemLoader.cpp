@@ -19,6 +19,7 @@
 #include <fstream>
 #include <sstream>
 #include <utility>
+#include <filesystem>
 
 namespace vix::template_
 {
@@ -67,6 +68,29 @@ namespace vix::template_
 
     std::ifstream file(path, std::ios::in | std::ios::binary);
     return file.good();
+  }
+
+  std::string FileSystemLoader::source_signature(
+      const std::string &name) const
+  {
+    namespace fs = std::filesystem;
+
+    const std::string path = join_path(root_, name);
+
+    std::error_code ec;
+
+    const fs::file_time_type last_write =
+        fs::last_write_time(path, ec);
+
+    if (ec)
+    {
+      return {};
+    }
+
+    const auto since_epoch =
+        last_write.time_since_epoch().count();
+
+    return std::to_string(since_epoch);
   }
 
   const std::string &FileSystemLoader::root() const noexcept

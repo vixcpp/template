@@ -31,6 +31,9 @@ namespace vix::template_
    * - the file system
    * - embedded assets
    * - any custom backend
+   *
+   * In V7, Loader may also expose a source signature used by the cache
+   * layer to detect stale compiled templates.
    */
   class Loader
   {
@@ -55,6 +58,31 @@ namespace vix::template_
      * @return True if the template can be loaded.
      */
     [[nodiscard]] virtual bool exists(const std::string &name) const = 0;
+
+    /**
+     * @brief Compute a source freshness signature for a template.
+     *
+     * This value is used by the compiled template cache to determine
+     * whether a cached template is still valid.
+     *
+     * Implementations may return:
+     * - a last-modified timestamp
+     * - a content hash
+     * - a revision token
+     * - any stable freshness identifier
+     *
+     * The default implementation returns an empty string, which means
+     * "no freshness information available".
+     *
+     * @param name Logical template name or path.
+     * @return Source signature, possibly empty.
+     */
+    [[nodiscard]] virtual std::string source_signature(
+        const std::string &name) const
+    {
+      (void)name;
+      return {};
+    }
   };
 
 } // namespace vix::template_

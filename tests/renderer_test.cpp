@@ -19,6 +19,7 @@
 #include <string>
 #include <utility>
 
+#include <vix/template/Cache.hpp>
 #include <vix/template/Compiler.hpp>
 #include <vix/template/Context.hpp>
 #include <vix/template/Error.hpp>
@@ -33,7 +34,8 @@ using namespace vix::template_;
 static Template compile_template(
     const std::string &tpl,
     const std::shared_ptr<Loader> &loader = nullptr,
-    const std::string &name = "inline")
+    const std::string &name = "inline",
+    const std::string &source_signature = {})
 {
   Lexer lexer(tpl);
   auto tokens = lexer.tokenize();
@@ -42,7 +44,7 @@ static Template compile_template(
   RootNode root = parser.parse();
 
   Compiler compiler;
-  return compiler.compile(name, std::move(root), loader);
+  return compiler.compile(name, std::move(root), loader, source_signature);
 }
 
 static std::string render(
@@ -58,9 +60,43 @@ static std::string render_with_loader(
     const std::string &tpl,
     const Context &ctx,
     const std::shared_ptr<Loader> &loader,
-    bool auto_escape_html = true)
+    bool auto_escape_html = true,
+    const std::string &name = "inline")
 {
-  Template compiled = compile_template(tpl, loader);
+  const std::string signature =
+      loader ? loader->source_signature(name) : std::string{};
+
+  Template compiled = compile_template(
+      tpl,
+      loader,
+      name,
+      signature);
+
+  return compiled.render(ctx, auto_escape_html).output;
+}
+
+static std::string render_with_loader_and_cache(
+    const std::string &tpl,
+    const Context &ctx,
+    const std::shared_ptr<Loader> &loader,
+    Cache &cache,
+    bool auto_escape_html = true,
+    const std::string &name = "inline")
+{
+  const std::string signature =
+      loader ? loader->source_signature(name) : std::string{};
+
+  Template compiled = compile_template(
+      tpl,
+      loader,
+      name,
+      signature);
+
+  cache.put(
+      name,
+      std::make_shared<Template>(std::move(compiled)),
+      signature);
+
   return compiled.render(ctx, auto_escape_html).output;
 }
 
@@ -781,6 +817,90 @@ static void test_render_modulo_by_zero()
   assert(thrown);
 }
 
+static void test_template_source_signature_is_preserved()
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set("inline", "Hello {{ name }}");
+
+  Template compiled = compile_template(
+      "Hello {{ name }}",
+      loader,
+      "inline",
+      loader->source_signature("inline"));
+
+  assert(!compiled.source_signature().empty());
+  assert(compiled.source_signature() == loader->source_signature("inline"));
+}
+
+static void test_cache_put_compiled_template()
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set("inline", "Hello {{ name }}");
+
+  const std::string signature = loader->source_signature("inline");
+
+  Template compiled = compile_template(
+      "Hello {{ name }}",
+      loader,
+      "inline",
+      signature);
+
+  Cache cache;
+  cache.put(
+      "inline",
+      std::make_shared<Template>(std::move(compiled)),
+      signature);
+
+  auto cached = cache.get("inline", signature);
+
+  assert(cached != nullptr);
+  assert(cached->name() == "inline");
+  assert(cached->source_signature() == signature);
+}
+
+static void test_cache_invalidation_on_source_change()
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set("inline", "Hello {{ name }}");
+
+  const std::string signature1 = loader->source_signature("inline");
+
+  Template compiled1 = compile_template(
+      "Hello {{ name }}",
+      loader,
+      "inline",
+      signature1);
+
+  Cache cache;
+  cache.put(
+      "inline",
+      std::make_shared<Template>(std::move(compiled1)),
+      signature1);
+
+  assert(cache.contains("inline", signature1));
+
+  loader->set("inline", "Hi {{ name }}");
+  const std::string signature2 = loader->source_signature("inline");
+
+  assert(signature1 != signature2);
+  assert(!cache.contains("inline", signature2));
+
+  Template compiled2 = compile_template(
+      "Hi {{ name }}",
+      loader,
+      "inline",
+      signature2);
+
+  cache.put(
+      "inline",
+      std::make_shared<Template>(std::move(compiled2)),
+      signature2);
+
+  auto cached = cache.get("inline", signature2);
+  assert(cached != nullptr);
+  assert(cached->source_signature() == signature2);
+}
+
 int main()
 {
   test_render_text();
@@ -842,6 +962,9 @@ int main()
   test_render_extends_invalid_child_content();
   test_render_division_by_zero();
   test_render_modulo_by_zero();
+  test_template_source_signature_is_preserved();
+  test_cache_put_compiled_template();
+  test_cache_invalidation_on_source_change();
 
   std::cout << "[OK] template renderer tests passed\n";
   return 0;

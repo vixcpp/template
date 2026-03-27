@@ -28,7 +28,8 @@ using namespace vix::template_;
 static Template compile_template(
     const std::string &name,
     const std::string &source,
-    std::shared_ptr<Loader> loader = nullptr)
+    std::shared_ptr<Loader> loader = nullptr,
+    std::string source_signature = {})
 {
   Lexer lexer(source);
   auto tokens = lexer.tokenize();
@@ -37,7 +38,11 @@ static Template compile_template(
   RootNode root = parser.parse();
 
   Compiler compiler;
-  return compiler.compile(name, std::move(root), std::move(loader));
+  return compiler.compile(
+      name,
+      std::move(root),
+      std::move(loader),
+      std::move(source_signature));
 }
 
 static void test_compile_basic()
@@ -48,6 +53,7 @@ static void test_compile_basic()
   assert(!tpl.empty());
   assert(tpl.root().children().size() == 1);
   assert(tpl.plan().size() == 1);
+  assert(tpl.source_signature().empty());
 }
 
 static void test_compile_variable()
@@ -58,6 +64,7 @@ static void test_compile_variable()
   assert(!tpl.empty());
   assert(tpl.root().children().size() == 2);
   assert(tpl.plan().size() == 2);
+  assert(tpl.source_signature().empty());
 }
 
 static void test_compile_if()
@@ -70,6 +77,7 @@ static void test_compile_if()
 
   // JumpIfFalse + EmitText
   assert(tpl.plan().size() == 2);
+  assert(tpl.source_signature().empty());
 }
 
 static void test_compile_for()
@@ -84,6 +92,7 @@ static void test_compile_for()
 
   // ForEachBegin + EmitVariable + ForEachEnd
   assert(tpl.plan().size() == 3);
+  assert(tpl.source_signature().empty());
 }
 
 static void test_compile_empty()
@@ -94,6 +103,7 @@ static void test_compile_empty()
   assert(tpl.empty());
   assert(tpl.root().children().empty());
   assert(tpl.plan().empty());
+  assert(tpl.source_signature().empty());
 }
 
 static void test_compile_adjacent_text_nodes_are_optimized()
@@ -112,12 +122,38 @@ static void test_compile_adjacent_text_nodes_are_optimized()
   // Optimizer should merge adjacent text nodes.
   assert(tpl.root().children().size() == 1);
   assert(tpl.plan().size() == 1);
+  assert(tpl.source_signature().empty());
 
   const Node &node = *tpl.root().children().front();
   assert(node.type() == NodeType::Text);
 
   const auto &text = static_cast<const TextNode &>(node);
   assert(text.value() == "Hello world");
+}
+
+static void test_compile_with_source_signature()
+{
+  Template tpl = compile_template(
+      "signed",
+      "Hello {{ name }}",
+      nullptr,
+      "sig:v7:hello");
+
+  assert(tpl.name() == "signed");
+  assert(!tpl.empty());
+  assert(tpl.root().children().size() == 2);
+  assert(tpl.plan().size() == 2);
+  assert(tpl.source_signature() == "sig:v7:hello");
+}
+
+static void test_set_source_signature()
+{
+  Template tpl = compile_template("mutable_sig", "Hello");
+
+  assert(tpl.source_signature().empty());
+
+  tpl.set_source_signature("runtime:updated");
+  assert(tpl.source_signature() == "runtime:updated");
 }
 
 int main()
@@ -128,6 +164,8 @@ int main()
   test_compile_for();
   test_compile_empty();
   test_compile_adjacent_text_nodes_are_optimized();
+  test_compile_with_source_signature();
+  test_set_source_signature();
 
   std::cout << "[OK] template compiler tests passed\n";
   return 0;

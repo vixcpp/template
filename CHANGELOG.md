@@ -1,174 +1,210 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## v0.7.0
 
-This project follows a simple versioning strategy:
-- breaking changes → major
-- new features → minor
-- fixes → patch
+Add cache-aware template freshness and safer inheritance rendering.
 
----
-## [v0.2.2]
+### Highlights
 
-### Added
-- Add benchmark executables for cache lookup, parsing, and rendering
-- Add initial benchmark results:
-  - cache lookup: ~930 ns per lookup
-  - parsing: ~58.6 µs per parse
-  - rendering: ~19.73 µs per render
-- Add a dedicated `templates/` directory for file-based examples
+V7 improves the template engine with cache freshness validation and a more robust rendering path for inheritance and block overrides.
 
-### Changed
-- Update file-based rendering example to resolve templates from the source `templates/` directory
-- Improve example build configuration for template file loading
-- Reorganize template assets into a clearer project structure
+### Features
 
-### Removed
-- Remove legacy template files from the old `template/` directory
+- Add source signature support to `Template`
+  - freshness token for cache validation
+  - enables safe invalidation of stale compiled templates
+- Improve cache integration
+  - validate compiled templates before reuse
+- Improve inheritance rendering
+  - better handling of `extends`
+  - correct propagation of block overrides
+- Keep AST alongside execution plan
+  - execution plan = fast path
+  - AST = inheritance, debugging, future compiler passes
 
-### Notes
-This release introduces first benchmark visibility and improves the reliability of file-based examples.
+### Internal Changes
 
-## [v0.2.1]
+- `Template` is now move-only
+  - copy disabled
+  - move enabled
+- Add `source_signature()` and `set_source_signature()`
+- Refine renderer logic for parent-child templates
 
-### Added
-- Add full documentation for template engine:
-  - architecture
-  - AST
-  - rendering
-  - syntax
-  - roadmap
-- Add CONTRIBUTING.md with contribution guidelines
-- Add SECURITY.md with vulnerability reporting policy
-- Add CODE_OF_CONDUCT.md
+### Performance Notes
 
-### Changed
-- Improve README with clear usage examples and positioning
-- Refine documentation structure for better developer experience
-
-### Notes
-This release focuses on documentation, clarity, and onboarding experience.
-
-## [v0.2.0]
-
-### Added
-- Add CMakePresets.json for unified configure/build/test workflows (Ninja + MSVC)
-- Add examples CMake integration with executable targets
-- Add benchmark targets (render, parse, cache)
-
-### Changed
-- Refactor cache usage to support non-copyable Template objects
-- Switch cache storage to shared immutable template handles
-- Improve overall CMake structure with modular subdirectories (tests, examples, benchmarks)
-
-### Fixed
-- Fix build failure caused by copying Template containing unique_ptr
-- Ensure benchmarks and examples are properly included in root build
-
-## [0.1.1] - fix(cache)
-- fix(cache): store compiled templates through shared immutable handles instead of copying non-copyable Template objects
-
-## [0.1.0] - Initial release
-
-### Added
-
-#### Core Engine
-- Template engine V1 implementation
-- deterministic rendering pipeline:
-  - Loader → Lexer → Parser → AST → Renderer
-- support for:
-  - variables (`{{ name }}`)
-  - conditionals (`{% if %}`)
-  - loops (`{% for %}`)
-- HTML auto-escaping enabled by default
-
-#### Architecture
-- AST system:
-  - RootNode
-  - TextNode
-  - VariableNode
-  - IfNode
-  - ForNode
-- Context and Value runtime system
-- Renderer with explicit node execution
-
-#### API
-- Engine (high-level API)
-- Environment (configuration layer)
-- Template abstraction
-- Loader interface:
-  - StringLoader
-  - FileSystemLoader
-
-#### Compiler & Cache
-- Compiler abstraction (V1 pass-through)
-- Cache interface for compiled templates
-
-#### Builtins
-- filter system foundation:
-  - upper
-  - lower
-  - length
-  - default
-
-#### Tests
-- full test suite:
-  - lexer
-  - parser
-  - renderer
-  - engine
-  - cache
-  - compiler
-  - loader
-  - integration tests
-
-#### Examples
-- basic rendering
-- file-based rendering
-- loops and conditions
-- includes simulation
-- layout inheritance simulation
-- filters usage (C++ side)
-
-#### Benchmarks
-- parse benchmark
-- render benchmark
-- cache benchmark
-
-#### Documentation
-- architecture overview
-- syntax reference
-- AST explanation
-- rendering pipeline
-- roadmap
+- Cache lookup faster than V6
+- Slight overhead on rendering paths (~10-13%)
+- Include and inheritance paths heavier due to correctness improvements
 
 ---
 
-### Design Principles
+## v0.6.0
 
-- deterministic execution
-- no hidden state
-- minimal core
-- explicit behavior
-- performance-oriented
+Compiler optimization with execution plan.
+
+### Features
+
+- Introduce execution plan
+  - precomputed rendering instructions
+  - avoids AST traversal during render
+- Add optimized renderer
+  - instruction-based execution instead of recursive AST walk
+- Improve rendering performance
+  - faster execution
+  - reduced CPU usage
+
+### Internal Changes
+
+- Separate parsing and execution phases
+- Add `ExecutionPlan`
+- Renderer supports plan-based execution
+
+### Outcome
+
+- major performance improvement
+- foundation for further optimizations
 
 ---
 
-### Notes
+## v0.5.0
 
-This is the first stable version of the Vix template engine.
+Add full expression system.
 
-Features like filters in templates, includes, and layout inheritance
-are planned for future versions.
+### Features
+
+- Support expressions in templates
+  - `{{ user.name }}`
+  - `{{ price * quantity }}`
+  - `{{ a == b }}`
+- Add expression AST
+- Add operator parsing
+- Add evaluation engine
+
+### Outcome
+
+- more flexible templates
+- closer to full template engines
 
 ---
 
-## Next
+## v0.4.0
 
-Planned features:
+Add layout inheritance support.
 
-- filter syntax integration (`{{ name | upper }}`)
-- include support (`{% include %}`)
-- layout inheritance (`{% extends %}`)
-- expression system
-- compiler optimizations
+### Features
+
+- Support `{% extends %}`
+- Support `{% block %}`
+- Template inheritance system
+- Parent-child template rendering
+
+### Outcome
+
+- reusable layouts
+- modular templates
+
+---
+
+## v0.3.0
+
+Add include support.
+
+### Features
+
+- Support `{% include %}`
+- Template loader integration
+- Dynamic template composition
+
+### Outcome
+
+- modular template structure
+- reuse smaller components
+
+---
+
+## v0.2.3
+
+Add filters support.
+
+### Features
+
+- Support filters on variables
+  - `{{ name | upper }}`
+- Filter system integration
+- Extend rendering pipeline
+
+---
+
+## v0.2.2
+
+Release improvements.
+
+### Changes
+
+- Improve project structure
+- Clean examples and templates
+- Improve stability
+
+---
+
+## v0.2.1
+
+Documentation improvements.
+
+### Changes
+
+- Improve documentation
+- Improve onboarding
+- Add clearer examples
+
+---
+
+## v0.2.0
+
+Stabilization release.
+
+### Features
+
+- Improve core engine reliability
+- Refine API
+- Prepare for advanced features (filters, include)
+
+---
+
+## v0.1.1
+
+Fix cache handling for Template.
+
+### Fixes
+
+- Avoid copying non-copyable `Template`
+- Fix ownership issues in cache layer
+
+---
+
+## v0.1.0
+
+Initial template engine.
+
+### Features
+
+- AST-based template engine
+- Parser and lexer
+- Renderer
+- Engine API
+- Context system
+- Basic template features
+- Tests and examples
+- Benchmarks
+
+### Outcome
+
+- fully functional template engine
+- solid foundation for future versions
+
+---
+
+## Initial commits
+
+- Project initialization
+- Repository setup

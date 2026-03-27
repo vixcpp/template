@@ -24,6 +24,7 @@
 
 #include <vix/template/AST.hpp>
 #include <vix/template/Builtins.hpp>
+#include <vix/template/Cache.hpp>
 #include <vix/template/Context.hpp>
 #include <vix/template/ExecutionPlan.hpp>
 #include <vix/template/Loader.hpp>
@@ -32,11 +33,13 @@
 
 namespace vix::template_
 {
+  class Template;
+
   /**
    * @brief Execution-plan renderer for template output generation.
    *
-   * In V6, Renderer executes a precomputed ExecutionPlan instead of
-   * traversing the AST recursively as the primary rendering path.
+   * Renderer executes a precomputed ExecutionPlan instead of traversing
+   * the AST recursively as the primary rendering path.
    *
    * This design improves:
    * - rendering speed
@@ -48,6 +51,9 @@ namespace vix::template_
    * - include / extends support
    * - block inheritance
    * - future advanced compilation features
+   *
+   * In V7, Renderer can optionally use a compiled template cache in order
+   * to avoid re-loading and re-compiling included templates repeatedly.
    */
   class Renderer
   {
@@ -62,10 +68,12 @@ namespace vix::template_
      *
      * @param auto_escape_html Whether variable output should be HTML-escaped.
      * @param loader Optional template loader used for include and extends.
+     * @param cache Optional compiled template cache.
      */
     explicit Renderer(
         bool auto_escape_html = true,
-        std::shared_ptr<Loader> loader = nullptr);
+        std::shared_ptr<Loader> loader = nullptr,
+        Cache *cache = nullptr);
 
     /**
      * @brief Render a compiled execution plan.
@@ -93,10 +101,27 @@ namespace vix::template_
         const Context &context,
         const BlockMap &overrides) const;
 
+    /**
+     * @brief Render a root AST node.
+     *
+     * This path is still needed for inheritance workflows such as extends.
+     *
+     * @param root Root AST node.
+     * @param context Runtime rendering context.
+     * @return Final render result.
+     */
     [[nodiscard]] RenderResult render(
         const RootNode &root,
         const Context &context) const;
 
+    /**
+     * @brief Render a root AST node with block overrides.
+     *
+     * @param root Root AST node.
+     * @param context Runtime rendering context.
+     * @param overrides Active block override map.
+     * @return Final render result.
+     */
     [[nodiscard]] RenderResult render(
         const RootNode &root,
         const Context &context,
@@ -178,9 +203,6 @@ namespace vix::template_
     /**
      * @brief Execute a foreach-begin instruction.
      *
-     * In V6 this hook prepares loop execution. The exact iteration strategy
-     * can evolve later without changing the public renderer interface.
-     *
      * @param instr Loop begin payload.
      * @param instruction_index Mutable instruction pointer.
      * @param context Runtime rendering context.
@@ -215,9 +237,6 @@ namespace vix::template_
     /**
      * @brief Evaluate an expression represented as text.
      *
-     * In V6, some compiled instructions keep a canonical textual expression
-     * representation produced by Compiler.
-     *
      * @param expression_text Canonical expression string.
      * @param context Runtime rendering context.
      * @return Evaluated value.
@@ -228,8 +247,6 @@ namespace vix::template_
 
     /**
      * @brief Evaluate an expression AST node.
-     *
-     * This remains the core evaluation entry point for expression execution.
      *
      * @param expr Expression to evaluate.
      * @param context Runtime rendering context.
@@ -373,6 +390,8 @@ namespace vix::template_
      *
      * Used for includes and extends resolution.
      *
+     * In V7, this method may reuse a compiled template from cache.
+     *
      * @param template_name Logical template name.
      * @param context Runtime rendering context.
      * @param output Output string buffer.
@@ -381,6 +400,29 @@ namespace vix::template_
         const std::string &template_name,
         const Context &context,
         std::string &output) const;
+
+    /**
+     * @brief Load or reuse a compiled template by name.
+     *
+     * This helper is intended for internal include/extends resolution.
+     *
+     * @param template_name Logical template name.
+     * @return Shared compiled template, or nullptr if unavailable.
+     */
+    [[nodiscard]] std::shared_ptr<const Template> load_template_by_name(
+        const std::string &template_name) const;
+
+    /**
+     * @brief Compute a source freshness signature for a template.
+     *
+     * Initial V7 implementation may return an empty string if the loader
+     * does not expose source versioning yet.
+     *
+     * @param template_name Logical template name.
+     * @return Source signature, possibly empty.
+     */
+    [[nodiscard]] std::string make_source_signature(
+        const std::string &template_name) const;
 
     /**
      * @brief Render a block node with override support.
@@ -397,8 +439,6 @@ namespace vix::template_
     /**
      * @brief Render a list of AST nodes.
      *
-     * Utility used for block rendering and compatibility paths.
-     *
      * @param nodes List of nodes.
      * @param context Runtime rendering context.
      * @param output Output string buffer.
@@ -410,9 +450,6 @@ namespace vix::template_
 
     /**
      * @brief Render a generic AST node.
-     *
-     * This helper remains available for compatibility paths still based on
-     * direct AST rendering, especially for inheritance and transitional code.
      *
      * @param node AST node.
      * @param context Runtime rendering context.
@@ -438,6 +475,11 @@ namespace vix::template_
      * @brief Template loader used to resolve include and extends nodes.
      */
     std::shared_ptr<Loader> loader_;
+
+    /**
+     * @brief Optional compiled template cache.
+     */
+    Cache *cache_{nullptr};
 
     /**
      * @brief Current render stack used to detect circular includes or extends.

@@ -16,11 +16,12 @@
 #ifndef VIX_TEMPLATE_COMPILER_HPP
 #define VIX_TEMPLATE_COMPILER_HPP
 
-#include <string>
 #include <memory>
+#include <string>
 
 #include <vix/template/AST.hpp>
 #include <vix/template/ExecutionPlan.hpp>
+#include <vix/template/Loader.hpp>
 #include <vix/template/Optimizer.hpp>
 #include <vix/template/Template.hpp>
 
@@ -29,24 +30,24 @@ namespace vix::template_
   /**
    * @brief Template compiler.
    *
-   * In V6, Compiler is responsible for transforming a parsed AST into an
+   * Compiler is responsible for transforming a parsed AST into an
    * optimized and executable form.
    *
    * Compilation pipeline:
    *
-   * 1. AST normalization (Optimizer)
-   * 2. AST optimization (merge, cleanup, etc.)
-   * 3. Execution plan generation (linear instruction stream)
-   * 4. Template construction
+   * 1. AST normalization / optimization
+   * 2. Execution plan generation
+   * 3. Template construction
    *
    * The resulting Template contains:
-   * - the original (or optimized) AST
+   * - the optimized AST
    * - a compiled ExecutionPlan for fast rendering
+   * - an optional source signature for cache validation
    *
    * This design enables:
-   * - faster rendering (no recursive AST traversal)
+   * - faster rendering
    * - better CPU cache locality
-   * - a foundation for future optimizations (V7+)
+   * - compiled template caching in V7
    */
   class Compiler
   {
@@ -62,12 +63,14 @@ namespace vix::template_
      * @param name Logical template name.
      * @param root Parsed AST root.
      * @param loader Optional loader used for include and extends resolution.
+     * @param source_signature Optional source freshness token.
      * @return Compiled template.
      */
     [[nodiscard]] Template compile(
         std::string name,
         RootNode root,
-        std::shared_ptr<Loader> loader = nullptr) const;
+        std::shared_ptr<Loader> loader = nullptr,
+        std::string source_signature = {}) const;
 
   private:
     /**
@@ -157,6 +160,12 @@ namespace vix::template_
     void compile_block(
         const BlockNode &node,
         ExecutionPlan &plan) const;
+
+  private:
+    /**
+     * @brief AST optimizer used before execution plan generation.
+     */
+    Optimizer optimizer_;
   };
 
 } // namespace vix::template_

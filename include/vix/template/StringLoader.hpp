@@ -31,6 +31,9 @@ namespace vix::template_
    * - tests
    * - embedded templates
    * - simple runtime usage without filesystem dependency
+   *
+   * In V7, it also exposes a source signature so cache invalidation works
+   * correctly when templates are updated at runtime.
    */
   class StringLoader : public Loader
   {
@@ -65,6 +68,18 @@ namespace vix::template_
      * @return True if present.
      */
     [[nodiscard]] bool exists(const std::string &name) const override;
+
+    /**
+     * @brief Compute a source signature for an in-memory template.
+     *
+     * This is based on the template content itself. When content changes,
+     * the signature changes → cache invalidation works automatically.
+     *
+     * @param name Template name.
+     * @return Content-based signature, or empty if not found.
+     */
+    [[nodiscard]] std::string source_signature(
+        const std::string &name) const override;
 
   private:
     /**
