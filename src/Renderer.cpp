@@ -42,6 +42,36 @@ namespace vix::template_
     result.from_cache = false;
     result.success = true;
 
+    const ExtendsNode *extends_node = find_extends(root);
+
+    if (extends_node != nullptr)
+    {
+      if (!loader_)
+      {
+        throw RendererError("extends requires a configured loader");
+      }
+
+      block_overrides_ = collect_blocks(root);
+      render_template_by_name(extends_node->template_name(), context, result.output);
+      return result;
+    }
+
+    block_overrides_.clear();
+    render_root(root, context, result.output);
+    return result;
+  }
+
+  RenderResult Renderer::render(
+      const RootNode &root,
+      const Context &context,
+      const BlockMap &overrides) const
+  {
+    RenderResult result;
+    result.escaped = auto_escape_html_;
+    result.from_cache = false;
+    result.success = true;
+
+    block_overrides_ = overrides;
     render_root(root, context, result.output);
     return result;
   }
@@ -75,6 +105,13 @@ namespace vix::template_
 
     case NodeType::Include:
       render_include(static_cast<const IncludeNode &>(node), context, output);
+      break;
+
+    case NodeType::Block:
+      render_block(static_cast<const BlockNode &>(node), context, output);
+      break;
+
+    case NodeType::Extends:
       break;
 
     default:
@@ -214,6 +251,159 @@ namespace vix::template_
       RootNode root = parser.parse();
 
       render_root(root, context, output);
+
+      include_stack_.pop_back();
+    }
+    catch (...)
+    {
+      include_stack_.pop_back();
+      throw;
+    }
+  }
+
+  void Renderer::render_block(
+      const BlockNode &node,
+      const Context &context,
+      std::string &output) const
+  {
+    const auto it = block_overrides_.find(node.name());
+
+    if (it != block_overrides_.end() && it->second != nullptr)
+    {
+      if (it->second == &node)
+      {
+        render_node_list(node.body(), context, output);
+        return;
+      }
+
+      render_node_list(it->second->body(), context, output);
+      return;
+    }
+
+    render_node_list(node.body(), context, output);
+  }
+
+  void Renderer::render_node_list(
+      const NodeList &nodes,
+      const Context &context,
+      std::string &output) const
+  {
+    for (const auto &child : nodes)
+    {
+      if (!child)
+      {
+        throw RendererError("null child node in node list");
+      }
+
+      render_node(*child, context, output);
+    }
+  }
+
+  const ExtendsNode *Renderer::find_extends(
+      const RootNode &root) const noexcept
+  {
+    for (const auto &child : root.children())
+    {
+      if (child && child->type() == NodeType::Extends)
+      {
+        return static_cast<const ExtendsNode *>(child.get());
+      }
+    }
+
+    return nullptr;
+  }
+
+  Renderer::BlockMap Renderer::collect_blocks(
+      const RootNode &root) const
+  {
+    BlockMap blocks;
+
+    for (const auto &child : root.children())
+    {
+      if (!child)
+      {
+        throw RendererError("null child node in root");
+      }
+
+      if (child->type() == NodeType::Extends)
+      {
+        continue;
+      }
+
+      if (child->type() != NodeType::Block)
+      {
+        throw RendererError(
+            "child template using extends may only contain block nodes");
+      }
+
+      const auto &block = static_cast<const BlockNode &>(*child);
+      blocks[block.name()] = &block;
+    }
+
+    return blocks;
+  }
+
+  void Renderer::render_template_by_name(
+      const std::string &template_name,
+      const Context &context,
+      std::string &output) const
+  {
+    if (!loader_)
+    {
+      throw RendererError("template inheritance requires a configured loader");
+    }
+
+    if (is_in_include_stack(template_name))
+    {
+      throw RendererError(
+          "circular template inheritance/include detected: " + template_name);
+    }
+
+    if (!loader_->exists(template_name))
+    {
+      throw RendererError("template not found: " + template_name);
+    }
+
+    include_stack_.push_back(template_name);
+
+    try
+    {
+      const std::string source = loader_->load(template_name);
+
+      Lexer lexer(source);
+      auto tokens = lexer.tokenize();
+
+      Parser parser(std::move(tokens));
+      RootNode root = parser.parse();
+
+      const ExtendsNode *extends_node = find_extends(root);
+      if (extends_node != nullptr)
+      {
+        BlockMap merged = block_overrides_;
+        BlockMap parent_blocks = collect_blocks(root);
+
+        for (const auto &[name, block] : parent_blocks)
+        {
+          if (merged.find(name) == merged.end())
+          {
+            merged[name] = block;
+          }
+        }
+
+        const BlockMap previous = block_overrides_;
+        block_overrides_ = merged;
+
+        render_template_by_name(
+            extends_node->template_name(),
+            context,
+            output);
+
+        block_overrides_ = previous;
+      }
+      else
+      {
+        render_root(root, context, output);
+      }
 
       include_stack_.pop_back();
     }

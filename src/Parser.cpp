@@ -101,7 +101,10 @@ namespace vix::template_
   {
     NodeList nodes;
 
-    while (!eof() && !is_endif_block() && !is_endfor_block())
+    while (!eof() &&
+           !is_endif_block() &&
+           !is_endfor_block() &&
+           !is_endblock_block())
     {
       nodes.push_back(parse_node());
     }
@@ -177,9 +180,67 @@ namespace vix::template_
     return std::make_unique<IncludeNode>(template_name.value);
   }
 
+  NodePtr Parser::parse_extends()
+  {
+    expect(TokenType::Identifier, "extends", "expected 'extends'");
+
+    const Token &template_name =
+        expect(TokenType::String, "expected string literal after 'extends'");
+
+    expect(TokenType::BlockClose, "expected '%}' after extends target");
+
+    return std::make_unique<ExtendsNode>(template_name.value);
+  }
+
+  NodePtr Parser::parse_block_node()
+  {
+    expect(TokenType::Identifier, "block", "expected 'block'");
+
+    const Token &name =
+        expect(TokenType::Identifier, "expected block name after 'block'");
+
+    expect(TokenType::BlockClose, "expected '%}' after block name");
+
+    NodeList body = parse_nodes();
+
+    if (!is_endblock_block())
+    {
+      throw ParserError("expected '{% endblock %}'");
+    }
+
+    consume_endblock();
+
+    return std::make_unique<BlockNode>(name.value, std::move(body));
+  }
+
+  bool Parser::is_endblock_block() const noexcept
+  {
+    return check(TokenType::BlockOpen) &&
+           peek(1).type == TokenType::Identifier &&
+           peek(1).value == "endblock" &&
+           peek(2).type == TokenType::BlockClose;
+  }
+
+  void Parser::consume_endblock()
+  {
+    expect(TokenType::BlockOpen, "expected '{%' before endblock");
+    expect(TokenType::Identifier, "endblock", "expected 'endblock'");
+    expect(TokenType::BlockClose, "expected '%}' after endblock");
+  }
+
   NodePtr Parser::parse_block()
   {
     expect(TokenType::BlockOpen, "expected '{%'");
+
+    if (check(TokenType::Identifier, "extends"))
+    {
+      return parse_extends();
+    }
+
+    if (check(TokenType::Identifier, "block"))
+    {
+      return parse_block_node();
+    }
 
     if (check(TokenType::Identifier, "include"))
     {

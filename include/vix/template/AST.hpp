@@ -33,7 +33,9 @@ namespace vix::template_
     Variable,
     If,
     For,
-    Include
+    Include,
+    Extends,
+    Block
   };
 
   class Node;
@@ -43,6 +45,8 @@ namespace vix::template_
   class IfNode;
   class ForNode;
   class IncludeNode;
+  class ExtendsNode;
+  class BlockNode;
 
   /**
    * @brief Owning pointer to an AST node.
@@ -533,6 +537,74 @@ namespace vix::template_
      * @brief Logical name of the included template.
      */
     std::string template_name_;
+  };
+
+  /**
+   * @brief Extends node.
+   *
+   * Example:
+   * {% extends "base.html" %}
+   */
+  class ExtendsNode final : public Node
+  {
+  public:
+    explicit ExtendsNode(std::string template_name)
+        : template_name_(std::move(template_name))
+    {
+    }
+
+    [[nodiscard]] NodeType type() const noexcept override
+    {
+      return NodeType::Extends;
+    }
+
+    [[nodiscard]] const std::string &template_name() const noexcept
+    {
+      return template_name_;
+    }
+
+  private:
+    std::string template_name_;
+  };
+
+  /**
+   * @brief Block node.
+   *
+   * Example:
+   * {% block content %} ... {% endblock %}
+   */
+  class BlockNode final : public Node
+  {
+  public:
+    BlockNode(std::string name, NodeList body)
+        : name_(std::move(name)),
+          body_(std::move(body))
+    {
+    }
+
+    [[nodiscard]] NodeType type() const noexcept override
+    {
+      return NodeType::Block;
+    }
+
+    [[nodiscard]] const std::string &name() const noexcept
+    {
+      return name_;
+    }
+
+    [[nodiscard]] const NodeList &body() const noexcept
+    {
+      return body_;
+    }
+
+    [[nodiscard]] NodeList &body() noexcept
+    {
+      return body_;
+    }
+
+  private:
+    std::string name_;
+    NodeList body_;
   };
 
 } // namespace vix::template_

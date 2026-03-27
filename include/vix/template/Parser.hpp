@@ -231,6 +231,13 @@ namespace vix::template_
      */
     void consume_endfor();
 
+    [[nodiscard]] NodePtr parse_extends();
+    [[nodiscard]] NodePtr parse_block_node();
+
+    [[nodiscard]] bool is_endblock_block() const noexcept;
+
+    void consume_endblock();
+
   private:
     /**
      * @brief Token stream being parsed.

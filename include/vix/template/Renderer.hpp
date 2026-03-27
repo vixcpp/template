@@ -53,6 +53,7 @@ namespace vix::template_
   class Renderer
   {
   public:
+    using BlockMap = std::unordered_map<std::string, const BlockNode *>;
     /**
      * @brief Construct a renderer.
      *
@@ -73,6 +74,19 @@ namespace vix::template_
     [[nodiscard]] RenderResult render(
         const RootNode &root,
         const Context &context) const;
+
+    /**
+     * @brief Render a template with block overrides.
+     *
+     * @param root Parsed root AST node.
+     * @param context Runtime rendering context.
+     * @param overrides Block override map.
+     * @return Final render result.
+     */
+    [[nodiscard]] RenderResult render(
+        const RootNode &root,
+        const Context &context,
+        const BlockMap &overrides) const;
 
   private:
     /**
@@ -206,6 +220,69 @@ namespace vix::template_
     [[nodiscard]] bool is_in_include_stack(
         const std::string &template_name) const noexcept;
 
+    /**
+     * @brief Render a block node with override support.
+     *
+     * If an override exists for this block name (from a child template),
+     * it is rendered instead of the default block body.
+     *
+     * @param node Block node.
+     * @param context Runtime rendering context.
+     * @param output Output string buffer.
+     */
+    void render_block(
+        const BlockNode &node,
+        const Context &context,
+        std::string &output) const;
+
+    /**
+     * @brief Render a list of AST nodes.
+     *
+     * Utility function used to render block bodies or nested structures.
+     *
+     * @param nodes List of nodes.
+     * @param context Runtime rendering context.
+     * @param output Output string buffer.
+     */
+    void render_node_list(
+        const NodeList &nodes,
+        const Context &context,
+        std::string &output) const;
+
+    /**
+     * @brief Find an extends node in the root.
+     *
+     * @param root Root AST node.
+     * @return Pointer to ExtendsNode or nullptr if not found.
+     */
+    [[nodiscard]] const ExtendsNode *find_extends(
+        const RootNode &root) const noexcept;
+
+    /**
+     * @brief Collect all block nodes from a template.
+     *
+     * Used to build the override map for template inheritance.
+     *
+     * @param root Root AST node.
+     * @return Map of block name to BlockNode pointer.
+     */
+    [[nodiscard]] BlockMap collect_blocks(
+        const RootNode &root) const;
+
+    /**
+     * @brief Render a template by its name.
+     *
+     * Used for template inheritance resolution (extends).
+     *
+     * @param template_name Template name.
+     * @param context Runtime rendering context.
+     * @param output Output string buffer.
+     */
+    void render_template_by_name(
+        const std::string &template_name,
+        const Context &context,
+        std::string &output) const;
+
   private:
     /**
      * @brief Whether HTML escaping is enabled for variable output.
@@ -226,6 +303,11 @@ namespace vix::template_
      * @brief Current include stack used to detect circular includes.
      */
     mutable std::vector<std::string> include_stack_;
+
+    /**
+     * @brief Active block overrides for template inheritance.
+     */
+    mutable BlockMap block_overrides_;
   };
 
 } // namespace vix::template_

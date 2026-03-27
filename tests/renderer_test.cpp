@@ -269,6 +269,147 @@ static void test_render_circular_include()
   assert(thrown);
 }
 
+static void test_render_block_default()
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set("base.html",
+              "<html>{% block content %}Default{% endblock %}</html>");
+
+  Context ctx;
+
+  const std::string out =
+      render_with_loader("{% include \"base.html\" %}", ctx, loader);
+
+  assert(out == "<html>Default</html>");
+}
+
+static void test_render_extends_override_block()
+{
+  auto loader = std::make_shared<StringLoader>();
+
+  loader->set("base.html",
+              "<html>{% block content %}Default{% endblock %}</html>");
+
+  Context ctx;
+
+  const std::string out =
+      render_with_loader(
+          "{% extends \"base.html\" %}"
+          "{% block content %}Hello{% endblock %}",
+          ctx,
+          loader);
+
+  assert(out == "<html>Hello</html>");
+}
+
+static void test_render_extends_with_variable()
+{
+  auto loader = std::make_shared<StringLoader>();
+
+  loader->set("base.html",
+              "<html>{% block content %}{% endblock %}</html>");
+
+  Context ctx;
+  ctx.set("name", "Alice");
+
+  const std::string out =
+      render_with_loader(
+          "{% extends \"base.html\" %}"
+          "{% block content %}Hello {{ name }}{% endblock %}",
+          ctx,
+          loader);
+
+  assert(out == "<html>Hello Alice</html>");
+}
+
+static void test_render_extends_fallback_to_parent_block()
+{
+  auto loader = std::make_shared<StringLoader>();
+
+  loader->set("base.html",
+              "<html>{% block content %}Default{% endblock %}</html>");
+
+  Context ctx;
+
+  const std::string out =
+      render_with_loader(
+          "{% extends \"base.html\" %}",
+          ctx,
+          loader);
+
+  assert(out == "<html>Default</html>");
+}
+
+static void test_render_extends_multiple_blocks()
+{
+  auto loader = std::make_shared<StringLoader>();
+
+  loader->set("base.html",
+              "<html>"
+              "{% block header %}H{% endblock %}"
+              "{% block content %}C{% endblock %}"
+              "</html>");
+
+  Context ctx;
+
+  const std::string out =
+      render_with_loader(
+          "{% extends \"base.html\" %}"
+          "{% block content %}X{% endblock %}",
+          ctx,
+          loader);
+
+  assert(out == "<html>HX</html>");
+}
+
+static void test_render_extends_nested()
+{
+  auto loader = std::make_shared<StringLoader>();
+
+  loader->set("base.html",
+              "<html>{% block content %}Base{% endblock %}</html>");
+
+  loader->set("layout.html",
+              "{% extends \"base.html\" %}"
+              "{% block content %}Layout{% endblock %}");
+
+  Context ctx;
+
+  const std::string out =
+      render_with_loader(
+          "{% extends \"layout.html\" %}"
+          "{% block content %}Page{% endblock %}",
+          ctx,
+          loader);
+
+  assert(out == "<html>Page</html>");
+}
+
+static void test_render_extends_invalid_child_content()
+{
+  auto loader = std::make_shared<StringLoader>();
+
+  loader->set("base.html",
+              "<html>{% block content %}{% endblock %}</html>");
+
+  Context ctx;
+
+  bool thrown = false;
+  try
+  {
+    (void)render_with_loader(
+        "{% extends \"base.html\" %}INVALID",
+        ctx,
+        loader);
+  }
+  catch (const RendererError &)
+  {
+    thrown = true;
+  }
+
+  assert(thrown);
+}
+
 int main()
 {
   test_render_text();
@@ -290,6 +431,13 @@ int main()
   test_render_include_with_context();
   test_render_include_missing_template();
   test_render_circular_include();
+  test_render_block_default();
+  test_render_extends_override_block();
+  test_render_extends_with_variable();
+  test_render_extends_fallback_to_parent_block();
+  test_render_extends_multiple_blocks();
+  test_render_extends_nested();
+  test_render_extends_invalid_child_content();
 
   std::cout << "[OK] template renderer tests passed\n";
   return 0;

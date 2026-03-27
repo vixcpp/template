@@ -22,6 +22,7 @@
 #include <vix/template/AST.hpp>
 #include <vix/template/Lexer.hpp>
 #include <vix/template/Parser.hpp>
+#include <vix/template/Error.hpp>
 
 using namespace vix::template_;
 
@@ -191,6 +192,98 @@ static void test_parse_include_with_surrounding_text()
   assert(text_after->value() == " World");
 }
 
+static void test_parse_extends()
+{
+  RootNode root = parse_template("{% extends \"base.html\" %}");
+
+  assert(root.children().size() == 1);
+  assert(root.children()[0]->type() == NodeType::Extends);
+
+  const auto *extends_node =
+      static_cast<const ExtendsNode *>(root.children()[0].get());
+
+  assert(extends_node->template_name() == "base.html");
+}
+
+static void test_parse_block()
+{
+  RootNode root = parse_template("{% block content %}Hello{% endblock %}");
+
+  assert(root.children().size() == 1);
+  assert(root.children()[0]->type() == NodeType::Block);
+
+  const auto *block_node =
+      static_cast<const BlockNode *>(root.children()[0].get());
+
+  assert(block_node->name() == "content");
+  assert(block_node->body().size() == 1);
+  assert(block_node->body()[0]->type() == NodeType::Text);
+
+  const auto *text =
+      static_cast<const TextNode *>(block_node->body()[0].get());
+
+  assert(text->value() == "Hello");
+}
+
+static void test_parse_extends_with_block()
+{
+  RootNode root = parse_template(
+      "{% extends \"base.html\" %}{% block content %}Hello{% endblock %}");
+
+  assert(root.children().size() == 2);
+  assert(root.children()[0]->type() == NodeType::Extends);
+  assert(root.children()[1]->type() == NodeType::Block);
+
+  const auto *extends_node =
+      static_cast<const ExtendsNode *>(root.children()[0].get());
+  const auto *block_node =
+      static_cast<const BlockNode *>(root.children()[1].get());
+
+  assert(extends_node->template_name() == "base.html");
+  assert(block_node->name() == "content");
+  assert(block_node->body().size() == 1);
+  assert(block_node->body()[0]->type() == NodeType::Text);
+
+  const auto *text =
+      static_cast<const TextNode *>(block_node->body()[0].get());
+
+  assert(text->value() == "Hello");
+}
+
+static void test_parse_nested_block_nodes()
+{
+  RootNode root = parse_template(
+      "{% block content %}Hello {{ name }}{% if user %}X{% endif %}{% endblock %}");
+
+  assert(root.children().size() == 1);
+  assert(root.children()[0]->type() == NodeType::Block);
+
+  const auto *block_node =
+      static_cast<const BlockNode *>(root.children()[0].get());
+
+  assert(block_node->name() == "content");
+  assert(block_node->body().size() == 3);
+  assert(block_node->body()[0]->type() == NodeType::Text);
+  assert(block_node->body()[1]->type() == NodeType::Variable);
+  assert(block_node->body()[2]->type() == NodeType::If);
+}
+
+static void test_parse_block_missing_endblock()
+{
+  bool thrown = false;
+
+  try
+  {
+    (void)parse_template("{% block content %}Hello");
+  }
+  catch (const ParserError &)
+  {
+    thrown = true;
+  }
+
+  assert(thrown);
+}
+
 int main()
 {
   test_parse_text();
@@ -202,6 +295,11 @@ int main()
   test_parse_nested_if_in_for();
   test_parse_include();
   test_parse_include_with_surrounding_text();
+  test_parse_extends();
+  test_parse_block();
+  test_parse_extends_with_block();
+  test_parse_nested_block_nodes();
+  test_parse_block_missing_endblock();
 
   std::cout << "[OK] template parser tests passed\n";
   return 0;
