@@ -30,14 +30,16 @@ namespace vix::template_
    * Parser consumes the token stream produced by Lexer and builds
    * a structured AST representation of the template.
    *
-   * Supported V2 constructs:
+   * Supported constructs:
    * - plain text
-   * - variable interpolation: {{ name }}
-   * - filtered variable interpolation: {{ name | upper }}
-   * - chained filters: {{ name | upper | length }}
-   * - if blocks: {% if cond %} ... {% endif %}
-   * - for blocks: {% for item in items %} ... {% endfor %}
-   * - include blocks: {% include "header.html" %}
+   * - variable interpolation
+   * - filtered interpolation
+   * - if blocks
+   * - for blocks
+   * - include blocks
+   * - extends blocks
+   * - named blocks
+   * - expression parsing for variables and conditions
    */
   class Parser
   {
@@ -150,9 +152,10 @@ namespace vix::template_
      * @brief Parse a variable interpolation node.
      *
      * Expected forms:
-     * {{ identifier }}
-     * {{ identifier | filter }}
-     * {{ identifier | filter1 | filter2 }}
+     * {{ user.name }}
+     * {{ price * quantity }}
+     * {{ a == b }}
+     * {{ user.name | upper }}
      *
      * @return Parsed variable node.
      */
@@ -171,7 +174,7 @@ namespace vix::template_
     /**
      * @brief Parse a block expression.
      *
-     * This dispatches to block-specific parsers such as if/for.
+     * This dispatches to block-specific parsers such as if/for/include.
      *
      * @return Parsed block node.
      */
@@ -181,7 +184,7 @@ namespace vix::template_
      * @brief Parse an if block.
      *
      * Expected form:
-     * {% if condition %} ... {% endif %}
+     * {% if expression %} ... {% endif %}
      *
      * @return Parsed if node.
      */
@@ -208,6 +211,130 @@ namespace vix::template_
     [[nodiscard]] NodePtr parse_include();
 
     /**
+     * @brief Parse an extends block.
+     *
+     * Expected form:
+     * {% extends "base.html" %}
+     *
+     * @return Parsed extends node.
+     */
+    [[nodiscard]] NodePtr parse_extends();
+
+    /**
+     * @brief Parse a named block.
+     *
+     * Expected form:
+     * {% block content %} ... {% endblock %}
+     *
+     * @return Parsed block node.
+     */
+    [[nodiscard]] NodePtr parse_block_node();
+
+    /**
+     * @brief Parse a full expression.
+     *
+     * This is the entry point for expression parsing.
+     *
+     * @return Parsed expression tree.
+     */
+    [[nodiscard]] ExprPtr parse_expression();
+
+    /**
+     * @brief Parse an expression using precedence climbing.
+     *
+     * @param min_precedence Minimum precedence accepted at this level.
+     * @return Parsed expression tree.
+     */
+    [[nodiscard]] ExprPtr parse_binary_expression(int min_precedence);
+
+    /**
+     * @brief Parse a unary expression.
+     *
+     * Examples:
+     * - !enabled
+     * - -price
+     * - +value
+     *
+     * @return Parsed unary or primary expression.
+     */
+    [[nodiscard]] ExprPtr parse_unary_expression();
+
+    /**
+     * @brief Parse a primary expression.
+     *
+     * Examples:
+     * - user
+     * - 42
+     * - "hello"
+     * - true
+     * - false
+     * - (a + b)
+     *
+     * @return Parsed primary expression.
+     */
+    [[nodiscard]] ExprPtr parse_primary_expression();
+
+    /**
+     * @brief Parse postfix expression parts.
+     *
+     * This currently handles member access such as:
+     * - user.name
+     * - order.total.amount
+     *
+     * @param expr Base expression.
+     * @return Completed postfix expression.
+     */
+    [[nodiscard]] ExprPtr parse_postfix_expression(ExprPtr expr);
+
+    /**
+     * @brief Parse an identifier-based expression.
+     *
+     * This starts with a bare identifier and may continue as a
+     * member access chain.
+     *
+     * @return Parsed expression.
+     */
+    [[nodiscard]] ExprPtr parse_identifier_expression();
+
+    /**
+     * @brief Check whether the current token is a unary operator.
+     *
+     * @return True if current token starts a unary expression.
+     */
+    [[nodiscard]] bool is_unary_operator() const noexcept;
+
+    /**
+     * @brief Check whether the current token is a binary operator.
+     *
+     * @return True if current token starts a binary operator.
+     */
+    [[nodiscard]] bool is_binary_operator() const noexcept;
+
+    /**
+     * @brief Convert the current token into a unary operator.
+     *
+     * @return Unary operator.
+     */
+    [[nodiscard]] UnaryOperator parse_unary_operator();
+
+    /**
+     * @brief Convert the current token into a binary operator.
+     *
+     * @return Binary operator.
+     */
+    [[nodiscard]] BinaryOperator parse_binary_operator();
+
+    /**
+     * @brief Get precedence for a binary operator.
+     *
+     * Higher numbers bind more strongly.
+     *
+     * @param op Binary operator.
+     * @return Operator precedence.
+     */
+    [[nodiscard]] int precedence(BinaryOperator op) const noexcept;
+
+    /**
      * @brief Check whether the current position starts a closing endif block.
      *
      * @return True if the current tokens represent {% endif %}.
@@ -222,6 +349,13 @@ namespace vix::template_
     [[nodiscard]] bool is_endfor_block() const noexcept;
 
     /**
+     * @brief Check whether the current position starts a closing endblock block.
+     *
+     * @return True if the current tokens represent {% endblock %}.
+     */
+    [[nodiscard]] bool is_endblock_block() const noexcept;
+
+    /**
      * @brief Consume the closing endif block.
      */
     void consume_endif();
@@ -231,11 +365,9 @@ namespace vix::template_
      */
     void consume_endfor();
 
-    [[nodiscard]] NodePtr parse_extends();
-    [[nodiscard]] NodePtr parse_block_node();
-
-    [[nodiscard]] bool is_endblock_block() const noexcept;
-
+    /**
+     * @brief Consume the closing endblock block.
+     */
     void consume_endblock();
 
   private:

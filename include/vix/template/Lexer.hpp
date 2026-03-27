@@ -34,6 +34,19 @@ namespace vix::template_
    * - plain text
    * - variable expressions: {{ ... }}
    * - block expressions: {% ... %}
+   *
+   * V5 extends expression lexing support with:
+   * - identifiers
+   * - numbers
+   * - strings
+   * - operators
+   * - punctuation
+   *
+   * Example supported expressions:
+   * - {{ user.name }}
+   * - {{ price * quantity }}
+   * - {{ a == b }}
+   * - {{ (price + tax) * quantity }}
    */
   class Lexer
   {
@@ -109,7 +122,7 @@ namespace vix::template_
      * @brief Read the inside of a variable expression.
      *
      * Example:
-     * {{ user }}
+     * {{ user.name }}
      *
      * @return Tokens for the variable expression body.
      */
@@ -119,7 +132,7 @@ namespace vix::template_
      * @brief Read the inside of a block expression.
      *
      * Example:
-     * {% if user %}
+     * {% if price * quantity > 0 %}
      *
      * @return Tokens for the block expression body.
      */
@@ -133,12 +146,19 @@ namespace vix::template_
     /**
      * @brief Read an identifier token.
      *
+     * Identifiers are used for variable names, member names,
+     * and template keywords such as if, for, include, extends, block.
+     *
      * @return Identifier token.
      */
     [[nodiscard]] Token read_identifier();
 
     /**
      * @brief Read a numeric token.
+     *
+     * Supported examples:
+     * - 123
+     * - 3.14
      *
      * @return Number token.
      */
@@ -147,6 +167,10 @@ namespace vix::template_
     /**
      * @brief Read a quoted string token.
      *
+     * Supported examples:
+     * - "hello"
+     * - 'hello'
+     *
      * @return String token.
      */
     [[nodiscard]] Token read_string();
@@ -154,9 +178,70 @@ namespace vix::template_
     /**
      * @brief Read an operator token.
      *
+     * Supported operators include:
+     * - +
+     * - -
+     * - *
+     * - /
+     * - %
+     * - ==
+     * - !=
+     * - <
+     * - <=
+     * - >
+     * - >=
+     * - !
+     * - &&
+     * - ||
+     * - |
+     *
      * @return Operator token.
      */
     [[nodiscard]] Token read_operator();
+
+    /**
+     * @brief Read a punctuation token.
+     *
+     * Supported punctuation includes:
+     * - (
+     * - )
+     * - .
+     * - ,
+     *
+     * @return Punctuation token.
+     */
+    [[nodiscard]] Token read_punctuation();
+
+    /**
+     * @brief Check whether a character may start an identifier.
+     *
+     * @param ch Character to inspect.
+     * @return True if the character can start an identifier.
+     */
+    [[nodiscard]] bool is_identifier_start(char ch) const noexcept;
+
+    /**
+     * @brief Check whether a character may continue an identifier.
+     *
+     * @param ch Character to inspect.
+     * @return True if the character can continue an identifier.
+     */
+    [[nodiscard]] bool is_identifier_part(char ch) const noexcept;
+
+    /**
+     * @brief Check whether a character is recognized as punctuation.
+     *
+     * @param ch Character to inspect.
+     * @return True if the character is punctuation.
+     */
+    [[nodiscard]] bool is_punctuation(char ch) const noexcept;
+
+    /**
+     * @brief Check whether the current position starts a known operator.
+     *
+     * @return True if the current character sequence is an operator.
+     */
+    [[nodiscard]] bool starts_operator() const noexcept;
 
     /**
      * @brief Append an EOF token to the token stream.

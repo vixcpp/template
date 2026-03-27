@@ -142,14 +142,14 @@ namespace vix::template_
   {
     expect(TokenType::VariableOpen, "expected '{{'");
 
-    const Token &name =
-        expect(TokenType::Identifier, "expected identifier inside variable expression");
-
+    ExprPtr expression = parse_expression();
     std::vector<FilterNode> filters = parse_filters();
 
     expect(TokenType::VariableClose, "expected '}}'");
 
-    return std::make_unique<VariableNode>(name.value, std::move(filters));
+    return std::make_unique<VariableNode>(
+        std::move(expression),
+        std::move(filters));
   }
 
   std::vector<FilterNode> Parser::parse_filters()
@@ -166,6 +166,38 @@ namespace vix::template_
     }
 
     return filters;
+  }
+
+  NodePtr Parser::parse_block()
+  {
+    expect(TokenType::BlockOpen, "expected '{%'");
+
+    if (check(TokenType::Identifier, "extends"))
+    {
+      return parse_extends();
+    }
+
+    if (check(TokenType::Identifier, "block"))
+    {
+      return parse_block_node();
+    }
+
+    if (check(TokenType::Identifier, "include"))
+    {
+      return parse_include();
+    }
+
+    if (check(TokenType::Identifier, "if"))
+    {
+      return parse_if();
+    }
+
+    if (check(TokenType::Identifier, "for"))
+    {
+      return parse_for();
+    }
+
+    throw ParserError("unsupported block type");
   }
 
   NodePtr Parser::parse_include()
@@ -213,59 +245,11 @@ namespace vix::template_
     return std::make_unique<BlockNode>(name.value, std::move(body));
   }
 
-  bool Parser::is_endblock_block() const noexcept
-  {
-    return check(TokenType::BlockOpen) &&
-           peek(1).type == TokenType::Identifier &&
-           peek(1).value == "endblock" &&
-           peek(2).type == TokenType::BlockClose;
-  }
-
-  void Parser::consume_endblock()
-  {
-    expect(TokenType::BlockOpen, "expected '{%' before endblock");
-    expect(TokenType::Identifier, "endblock", "expected 'endblock'");
-    expect(TokenType::BlockClose, "expected '%}' after endblock");
-  }
-
-  NodePtr Parser::parse_block()
-  {
-    expect(TokenType::BlockOpen, "expected '{%'");
-
-    if (check(TokenType::Identifier, "extends"))
-    {
-      return parse_extends();
-    }
-
-    if (check(TokenType::Identifier, "block"))
-    {
-      return parse_block_node();
-    }
-
-    if (check(TokenType::Identifier, "include"))
-    {
-      return parse_include();
-    }
-
-    if (check(TokenType::Identifier, "if"))
-    {
-      return parse_if();
-    }
-
-    if (check(TokenType::Identifier, "for"))
-    {
-      return parse_for();
-    }
-
-    throw ParserError("unsupported block type");
-  }
-
   NodePtr Parser::parse_if()
   {
     expect(TokenType::Identifier, "if", "expected 'if'");
 
-    const Token &condition =
-        expect(TokenType::Identifier, "expected condition identifier after 'if'");
+    ExprPtr condition = parse_expression();
 
     expect(TokenType::BlockClose, "expected '%}' after if condition");
 
@@ -278,7 +262,9 @@ namespace vix::template_
 
     consume_endif();
 
-    return std::make_unique<IfNode>(condition.value, std::move(body));
+    return std::make_unique<IfNode>(
+        std::move(condition),
+        std::move(body));
   }
 
   NodePtr Parser::parse_for()
@@ -310,6 +296,273 @@ namespace vix::template_
         std::move(body));
   }
 
+  ExprPtr Parser::parse_expression()
+  {
+    return parse_binary_expression(1);
+  }
+
+  ExprPtr Parser::parse_binary_expression(int min_precedence)
+  {
+    ExprPtr left = parse_unary_expression();
+
+    while (is_binary_operator())
+    {
+      BinaryOperator op = parse_binary_operator();
+      const int op_precedence = precedence(op);
+
+      if (op_precedence < min_precedence)
+      {
+        break;
+      }
+
+      advance();
+
+      ExprPtr right = parse_binary_expression(op_precedence + 1);
+
+      left = std::make_unique<BinaryExpression>(
+          std::move(left),
+          op,
+          std::move(right));
+    }
+
+    return left;
+  }
+
+  ExprPtr Parser::parse_unary_expression()
+  {
+    if (is_unary_operator())
+    {
+      UnaryOperator op = parse_unary_operator();
+      advance();
+
+      ExprPtr operand = parse_unary_expression();
+
+      return std::make_unique<UnaryExpression>(
+          op,
+          std::move(operand));
+    }
+
+    return parse_primary_expression();
+  }
+
+  ExprPtr Parser::parse_primary_expression()
+  {
+    if (check(TokenType::Identifier, "true"))
+    {
+      const Token &token = advance();
+      return std::make_unique<LiteralExpression>(token.value);
+    }
+
+    if (check(TokenType::Identifier, "false"))
+    {
+      const Token &token = advance();
+      return std::make_unique<LiteralExpression>(token.value);
+    }
+
+    if (check(TokenType::Number))
+    {
+      const Token &token = advance();
+      return std::make_unique<LiteralExpression>(token.value);
+    }
+
+    if (check(TokenType::String))
+    {
+      const Token &token = advance();
+      return std::make_unique<LiteralExpression>(token.value);
+    }
+
+    if (check(TokenType::Punctuation, "("))
+    {
+      advance();
+
+      ExprPtr expr = parse_expression();
+
+      expect(TokenType::Punctuation, ")", "expected ')' after expression");
+
+      return parse_postfix_expression(std::move(expr));
+    }
+
+    if (check(TokenType::Identifier))
+    {
+      return parse_identifier_expression();
+    }
+
+    throw ParserError("expected primary expression");
+  }
+
+  ExprPtr Parser::parse_postfix_expression(ExprPtr expr)
+  {
+    while (check(TokenType::Punctuation, "."))
+    {
+      advance();
+
+      const Token &member =
+          expect(TokenType::Identifier, "expected member name after '.'");
+
+      expr = std::make_unique<MemberExpression>(
+          std::move(expr),
+          member.value);
+    }
+
+    return expr;
+  }
+
+  ExprPtr Parser::parse_identifier_expression()
+  {
+    const Token &name =
+        expect(TokenType::Identifier, "expected identifier");
+
+    ExprPtr expr = std::make_unique<NameExpression>(name.value);
+    return parse_postfix_expression(std::move(expr));
+  }
+
+  bool Parser::is_unary_operator() const noexcept
+  {
+    return check(TokenType::Operator, "!") ||
+           check(TokenType::Operator, "-") ||
+           check(TokenType::Operator, "+");
+  }
+
+  bool Parser::is_binary_operator() const noexcept
+  {
+    return check(TokenType::Operator, "+") ||
+           check(TokenType::Operator, "-") ||
+           check(TokenType::Operator, "*") ||
+           check(TokenType::Operator, "/") ||
+           check(TokenType::Operator, "%") ||
+           check(TokenType::Operator, "==") ||
+           check(TokenType::Operator, "!=") ||
+           check(TokenType::Operator, "<") ||
+           check(TokenType::Operator, "<=") ||
+           check(TokenType::Operator, ">") ||
+           check(TokenType::Operator, ">=") ||
+           check(TokenType::Operator, "&&") ||
+           check(TokenType::Operator, "||");
+  }
+
+  UnaryOperator Parser::parse_unary_operator()
+  {
+    if (check(TokenType::Operator, "+"))
+    {
+      return UnaryOperator::Plus;
+    }
+
+    if (check(TokenType::Operator, "-"))
+    {
+      return UnaryOperator::Minus;
+    }
+
+    if (check(TokenType::Operator, "!"))
+    {
+      return UnaryOperator::Not;
+    }
+
+    throw ParserError("unsupported unary operator");
+  }
+
+  BinaryOperator Parser::parse_binary_operator()
+  {
+    if (check(TokenType::Operator, "+"))
+    {
+      return BinaryOperator::Add;
+    }
+
+    if (check(TokenType::Operator, "-"))
+    {
+      return BinaryOperator::Subtract;
+    }
+
+    if (check(TokenType::Operator, "*"))
+    {
+      return BinaryOperator::Multiply;
+    }
+
+    if (check(TokenType::Operator, "/"))
+    {
+      return BinaryOperator::Divide;
+    }
+
+    if (check(TokenType::Operator, "%"))
+    {
+      return BinaryOperator::Modulo;
+    }
+
+    if (check(TokenType::Operator, "=="))
+    {
+      return BinaryOperator::Equal;
+    }
+
+    if (check(TokenType::Operator, "!="))
+    {
+      return BinaryOperator::NotEqual;
+    }
+
+    if (check(TokenType::Operator, "<"))
+    {
+      return BinaryOperator::Less;
+    }
+
+    if (check(TokenType::Operator, "<="))
+    {
+      return BinaryOperator::LessEqual;
+    }
+
+    if (check(TokenType::Operator, ">"))
+    {
+      return BinaryOperator::Greater;
+    }
+
+    if (check(TokenType::Operator, ">="))
+    {
+      return BinaryOperator::GreaterEqual;
+    }
+
+    if (check(TokenType::Operator, "&&"))
+    {
+      return BinaryOperator::And;
+    }
+
+    if (check(TokenType::Operator, "||"))
+    {
+      return BinaryOperator::Or;
+    }
+
+    throw ParserError("unsupported binary operator");
+  }
+
+  int Parser::precedence(BinaryOperator op) const noexcept
+  {
+    switch (op)
+    {
+    case BinaryOperator::Or:
+      return 1;
+
+    case BinaryOperator::And:
+      return 2;
+
+    case BinaryOperator::Equal:
+    case BinaryOperator::NotEqual:
+      return 3;
+
+    case BinaryOperator::Less:
+    case BinaryOperator::LessEqual:
+    case BinaryOperator::Greater:
+    case BinaryOperator::GreaterEqual:
+      return 4;
+
+    case BinaryOperator::Add:
+    case BinaryOperator::Subtract:
+      return 5;
+
+    case BinaryOperator::Multiply:
+    case BinaryOperator::Divide:
+    case BinaryOperator::Modulo:
+      return 6;
+    }
+
+    return 0;
+  }
+
   bool Parser::is_endif_block() const noexcept
   {
     return check(TokenType::BlockOpen) &&
@@ -326,6 +579,14 @@ namespace vix::template_
            peek(2).type == TokenType::BlockClose;
   }
 
+  bool Parser::is_endblock_block() const noexcept
+  {
+    return check(TokenType::BlockOpen) &&
+           peek(1).type == TokenType::Identifier &&
+           peek(1).value == "endblock" &&
+           peek(2).type == TokenType::BlockClose;
+  }
+
   void Parser::consume_endif()
   {
     expect(TokenType::BlockOpen, "expected '{%' before endif");
@@ -338,6 +599,13 @@ namespace vix::template_
     expect(TokenType::BlockOpen, "expected '{%' before endfor");
     expect(TokenType::Identifier, "endfor", "expected 'endfor'");
     expect(TokenType::BlockClose, "expected '%}' after endfor");
+  }
+
+  void Parser::consume_endblock()
+  {
+    expect(TokenType::BlockOpen, "expected '{%' before endblock");
+    expect(TokenType::Identifier, "endblock", "expected 'endblock'");
+    expect(TokenType::BlockClose, "expected '%}' after endblock");
   }
 
 } // namespace vix::template_

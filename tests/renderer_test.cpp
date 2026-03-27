@@ -27,7 +27,10 @@
 
 using namespace vix::template_;
 
-static std::string render(const std::string &tpl, const Context &ctx)
+static std::string render(
+    const std::string &tpl,
+    const Context &ctx,
+    bool auto_escape_html = true)
 {
   Lexer lexer(tpl);
   auto tokens = lexer.tokenize();
@@ -35,14 +38,15 @@ static std::string render(const std::string &tpl, const Context &ctx)
   Parser parser(std::move(tokens));
   RootNode root = parser.parse();
 
-  Renderer renderer(true);
+  Renderer renderer(auto_escape_html);
   return renderer.render(root, ctx).output;
 }
 
 static std::string render_with_loader(
     const std::string &tpl,
     const Context &ctx,
-    const std::shared_ptr<Loader> &loader)
+    const std::shared_ptr<Loader> &loader,
+    bool auto_escape_html = true)
 {
   Lexer lexer(tpl);
   auto tokens = lexer.tokenize();
@@ -50,7 +54,7 @@ static std::string render_with_loader(
   Parser parser(std::move(tokens));
   RootNode root = parser.parse();
 
-  Renderer renderer(true, loader);
+  Renderer renderer(auto_escape_html, loader);
   return renderer.render(root, ctx).output;
 }
 
@@ -77,6 +81,240 @@ static void test_render_missing_variable()
   assert(out == "Hello ");
 }
 
+static void test_render_member_expression()
+{
+  Context ctx;
+  Object user;
+  user["name"] = Value("Alice");
+  ctx.set("user", user);
+
+  const std::string out = render("Hello {{ user.name }}", ctx);
+  assert(out == "Hello Alice");
+}
+
+static void test_render_nested_member_expression()
+{
+  Context ctx;
+
+  Object customer;
+  customer["name"] = Value("Alice");
+
+  Object order;
+  order["customer"] = Value(customer);
+
+  ctx.set("order", order);
+
+  const std::string out = render("{{ order.customer.name }}", ctx);
+  assert(out == "Alice");
+}
+
+static void test_render_missing_member_expression()
+{
+  Context ctx;
+  Object user;
+  ctx.set("user", user);
+
+  const std::string out = render("Hello {{ user.name }}", ctx);
+  assert(out == "Hello ");
+}
+
+static void test_render_integer_literal()
+{
+  Context ctx;
+  const std::string out = render("{{ 123 }}", ctx);
+  assert(out == "123");
+}
+
+static void test_render_string_literal()
+{
+  Context ctx;
+  const std::string out = render("{{ \"hello\" }}", ctx);
+  assert(out == "hello");
+}
+
+static void test_render_boolean_literal_true()
+{
+  Context ctx;
+  const std::string out = render("{{ true }}", ctx);
+  assert(out == "true");
+}
+
+static void test_render_boolean_literal_false()
+{
+  Context ctx;
+  const std::string out = render("{{ false }}", ctx);
+  assert(out == "false");
+}
+
+static void test_render_addition()
+{
+  Context ctx;
+  ctx.set("a", 2);
+  ctx.set("b", 3);
+
+  const std::string out = render("{{ a + b }}", ctx);
+  assert(out == "5");
+}
+
+static void test_render_subtraction()
+{
+  Context ctx;
+  ctx.set("a", 10);
+  ctx.set("b", 4);
+
+  const std::string out = render("{{ a - b }}", ctx);
+  assert(out == "6");
+}
+
+static void test_render_multiplication()
+{
+  Context ctx;
+  ctx.set("price", 6);
+  ctx.set("quantity", 7);
+
+  const std::string out = render("{{ price * quantity }}", ctx);
+  assert(out == "42");
+}
+
+static void test_render_division()
+{
+  Context ctx;
+  ctx.set("a", 8);
+  ctx.set("b", 2);
+
+  const std::string out = render("{{ a / b }}", ctx);
+  assert(out == "4");
+}
+
+static void test_render_modulo()
+{
+  Context ctx;
+  ctx.set("a", 10);
+  ctx.set("b", 3);
+
+  const std::string out = render("{{ a % b }}", ctx);
+  assert(out == "1");
+}
+
+static void test_render_unary_not_true()
+{
+  Context ctx;
+  ctx.set("enabled", true);
+
+  const std::string out = render("{{ !enabled }}", ctx);
+  assert(out == "false");
+}
+
+static void test_render_unary_not_false()
+{
+  Context ctx;
+  ctx.set("enabled", false);
+
+  const std::string out = render("{{ !enabled }}", ctx);
+  assert(out == "true");
+}
+
+static void test_render_unary_minus()
+{
+  Context ctx;
+  ctx.set("price", 5);
+
+  const std::string out = render("{{ -price }}", ctx);
+  assert(out == "-5");
+}
+
+static void test_render_comparison_equal()
+{
+  Context ctx;
+  ctx.set("a", 5);
+  ctx.set("b", 5);
+
+  const std::string out = render("{{ a == b }}", ctx);
+  assert(out == "true");
+}
+
+static void test_render_comparison_not_equal()
+{
+  Context ctx;
+  ctx.set("a", 5);
+  ctx.set("b", 7);
+
+  const std::string out = render("{{ a != b }}", ctx);
+  assert(out == "true");
+}
+
+static void test_render_comparison_greater()
+{
+  Context ctx;
+  ctx.set("a", 7);
+  ctx.set("b", 3);
+
+  const std::string out = render("{{ a > b }}", ctx);
+  assert(out == "true");
+}
+
+static void test_render_comparison_less_equal()
+{
+  Context ctx;
+  ctx.set("a", 3);
+  ctx.set("b", 3);
+
+  const std::string out = render("{{ a <= b }}", ctx);
+  assert(out == "true");
+}
+
+static void test_render_logical_and()
+{
+  Context ctx;
+  ctx.set("a", true);
+  ctx.set("b", true);
+
+  const std::string out = render("{{ a && b }}", ctx);
+  assert(out == "true");
+}
+
+static void test_render_logical_or()
+{
+  Context ctx;
+  ctx.set("a", false);
+  ctx.set("b", true);
+
+  const std::string out = render("{{ a || b }}", ctx);
+  assert(out == "true");
+}
+
+static void test_render_parenthesized_expression()
+{
+  Context ctx;
+  ctx.set("price", 10);
+  ctx.set("tax", 2);
+  ctx.set("quantity", 3);
+
+  const std::string out = render("{{ (price + tax) * quantity }}", ctx);
+  assert(out == "36");
+}
+
+static void test_render_operator_precedence()
+{
+  Context ctx;
+  ctx.set("a", 2);
+  ctx.set("b", 3);
+  ctx.set("c", 4);
+
+  const std::string out = render("{{ a + b * c }}", ctx);
+  assert(out == "14");
+}
+
+static void test_render_string_concatenation()
+{
+  Context ctx;
+  ctx.set("first", "Hello ");
+  ctx.set("second", "World");
+
+  const std::string out = render("{{ first + second }}", ctx);
+  assert(out == "Hello World");
+}
+
 static void test_render_if_true()
 {
   Context ctx;
@@ -92,6 +330,30 @@ static void test_render_if_false()
   ctx.set("user", false);
 
   const std::string out = render("{% if user %}OK{% endif %}", ctx);
+  assert(out.empty());
+}
+
+static void test_render_if_with_expression_true()
+{
+  Context ctx;
+  ctx.set("price", 6);
+  ctx.set("quantity", 7);
+
+  const std::string out =
+      render("{% if price * quantity > 40 %}OK{% endif %}", ctx);
+
+  assert(out == "OK");
+}
+
+static void test_render_if_with_expression_false()
+{
+  Context ctx;
+  ctx.set("price", 2);
+  ctx.set("quantity", 3);
+
+  const std::string out =
+      render("{% if price * quantity > 40 %}OK{% endif %}", ctx);
+
   assert(out.empty());
 }
 
@@ -136,6 +398,15 @@ static void test_html_escape()
   assert(out == "&lt;b&gt;test&lt;/b&gt;");
 }
 
+static void test_render_without_html_escape()
+{
+  Context ctx;
+  ctx.set("html", "<b>test</b>");
+
+  const std::string out = render("{{ html }}", ctx, false);
+  assert(out == "<b>test</b>");
+}
+
 static void test_render_upper_filter()
 {
   Context ctx;
@@ -175,6 +446,26 @@ static void test_render_length_filter_on_array()
 
   const std::string out = render("{{ items | length }}", ctx);
   assert(out == "3");
+}
+
+static void test_render_expression_with_filter()
+{
+  Context ctx;
+  ctx.set("name", "alice");
+
+  const std::string out = render("{{ name | upper }}", ctx);
+  assert(out == "ALICE");
+}
+
+static void test_render_member_expression_with_filter()
+{
+  Context ctx;
+  Object user;
+  user["name"] = Value("alice");
+  ctx.set("user", user);
+
+  const std::string out = render("{{ user.name | upper }}", ctx);
+  assert(out == "ALICE");
 }
 
 static void test_render_chained_filters()
@@ -227,6 +518,21 @@ static void test_render_include_with_context()
       render_with_loader("{% include \"header.html\" %}", ctx, loader);
 
   assert(out == "Hello Alice");
+}
+
+static void test_render_include_with_expression()
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set("header.html", "{{ price * quantity }}");
+
+  Context ctx;
+  ctx.set("price", 6);
+  ctx.set("quantity", 7);
+
+  const std::string out =
+      render_with_loader("{% include \"header.html\" %}", ctx, loader);
+
+  assert(out == "42");
 }
 
 static void test_render_include_missing_template()
@@ -322,6 +628,27 @@ static void test_render_extends_with_variable()
   assert(out == "<html>Hello Alice</html>");
 }
 
+static void test_render_extends_with_expression()
+{
+  auto loader = std::make_shared<StringLoader>();
+
+  loader->set("base.html",
+              "<html>{% block content %}{% endblock %}</html>");
+
+  Context ctx;
+  ctx.set("price", 6);
+  ctx.set("quantity", 7);
+
+  const std::string out =
+      render_with_loader(
+          "{% extends \"base.html\" %}"
+          "{% block content %}{{ price * quantity }}{% endblock %}",
+          ctx,
+          loader);
+
+  assert(out == "<html>42</html>");
+}
+
 static void test_render_extends_fallback_to_parent_block()
 {
   auto loader = std::make_shared<StringLoader>();
@@ -410,34 +737,105 @@ static void test_render_extends_invalid_child_content()
   assert(thrown);
 }
 
+static void test_render_division_by_zero()
+{
+  Context ctx;
+  ctx.set("a", 8);
+  ctx.set("b", 0);
+
+  bool thrown = false;
+  try
+  {
+    (void)render("{{ a / b }}", ctx);
+  }
+  catch (const RendererError &)
+  {
+    thrown = true;
+  }
+
+  assert(thrown);
+}
+
+static void test_render_modulo_by_zero()
+{
+  Context ctx;
+  ctx.set("a", 8);
+  ctx.set("b", 0);
+
+  bool thrown = false;
+  try
+  {
+    (void)render("{{ a % b }}", ctx);
+  }
+  catch (const RendererError &)
+  {
+    thrown = true;
+  }
+
+  assert(thrown);
+}
+
 int main()
 {
   test_render_text();
   test_render_variable();
   test_render_missing_variable();
+  test_render_member_expression();
+  test_render_nested_member_expression();
+  test_render_missing_member_expression();
+  test_render_integer_literal();
+  test_render_string_literal();
+  test_render_boolean_literal_true();
+  test_render_boolean_literal_false();
+  test_render_addition();
+  test_render_subtraction();
+  test_render_multiplication();
+  test_render_division();
+  test_render_modulo();
+  test_render_unary_not_true();
+  test_render_unary_not_false();
+  test_render_unary_minus();
+  test_render_comparison_equal();
+  test_render_comparison_not_equal();
+  test_render_comparison_greater();
+  test_render_comparison_less_equal();
+  test_render_logical_and();
+  test_render_logical_or();
+  test_render_parenthesized_expression();
+  test_render_operator_precedence();
+  test_render_string_concatenation();
   test_render_if_true();
   test_render_if_false();
+  test_render_if_with_expression_true();
+  test_render_if_with_expression_false();
   test_render_for();
   test_render_nested();
   test_html_escape();
+  test_render_without_html_escape();
   test_render_upper_filter();
   test_render_lower_filter();
   test_render_length_filter_on_string();
   test_render_length_filter_on_array();
+  test_render_expression_with_filter();
+  test_render_member_expression_with_filter();
   test_render_chained_filters();
   test_render_default_filter_on_missing_variable();
   test_render_default_filter_on_empty_string();
   test_render_include_simple();
   test_render_include_with_context();
+  test_render_include_with_expression();
   test_render_include_missing_template();
   test_render_circular_include();
   test_render_block_default();
   test_render_extends_override_block();
   test_render_extends_with_variable();
+  test_render_extends_with_expression();
   test_render_extends_fallback_to_parent_block();
   test_render_extends_multiple_blocks();
   test_render_extends_nested();
   test_render_extends_invalid_child_content();
+  test_render_division_by_zero();
+  test_render_modulo_by_zero();
 
   std::cout << "[OK] template renderer tests passed\n";
   return 0;

@@ -66,7 +66,10 @@ namespace vix::template_
   char Lexer::peek() const noexcept
   {
     if (eof())
+    {
       return '\0';
+    }
+
     return input_[pos_];
   }
 
@@ -74,16 +77,22 @@ namespace vix::template_
   {
     const std::size_t p = pos_ + offset;
     if (p >= input_.size())
+    {
       return '\0';
+    }
+
     return input_[p];
   }
 
   char Lexer::advance() noexcept
   {
     if (eof())
+    {
       return '\0';
+    }
 
-    char c = input_[pos_++];
+    const char c = input_[pos_++];
+
     if (c == '\n')
     {
       ++line_;
@@ -100,7 +109,9 @@ namespace vix::template_
   bool Lexer::starts_with(const std::string &pattern) const noexcept
   {
     if (pos_ + pattern.size() > input_.size())
+    {
       return false;
+    }
 
     return input_.compare(pos_, pattern.size(), pattern) == 0;
   }
@@ -108,7 +119,9 @@ namespace vix::template_
   bool Lexer::consume(const std::string &pattern) noexcept
   {
     if (!starts_with(pattern))
+    {
       return false;
+    }
 
     for (std::size_t i = 0; i < pattern.size(); ++i)
     {
@@ -121,8 +134,8 @@ namespace vix::template_
   Token Lexer::read_text()
   {
     std::string value;
-    std::size_t start_line = line_;
-    std::size_t start_col = column_;
+    const std::size_t start_line = line_;
+    const std::size_t start_col = column_;
 
     while (!eof() && !starts_with("{{") && !starts_with("{%"))
     {
@@ -142,32 +155,51 @@ namespace vix::template_
     {
       skip_whitespace();
 
-      if (std::isalpha(peek()) || peek() == '_')
+      if (starts_with("}}"))
+      {
+        break;
+      }
+
+      const char ch = peek();
+
+      if (is_identifier_start(ch))
       {
         tokens.push_back(read_identifier());
       }
-      else if (std::isdigit(peek()))
+      else if (std::isdigit(static_cast<unsigned char>(ch)))
       {
         tokens.push_back(read_number());
       }
-      else if (peek() == '"' || peek() == '\'')
+      else if (ch == '"' || ch == '\'')
       {
         tokens.push_back(read_string());
       }
-      else
+      else if (is_punctuation(ch))
+      {
+        tokens.push_back(read_punctuation());
+      }
+      else if (starts_operator())
       {
         tokens.push_back(read_operator());
+      }
+      else
+      {
+        throw LexerError("unexpected character inside variable expression");
       }
 
       skip_whitespace();
     }
 
-    if (!consume("}}"))
+    if (!starts_with("}}"))
     {
       throw LexerError("unterminated variable expression");
     }
 
-    tokens.emplace_back(TokenType::VariableClose, "}}", line_, column_);
+    const std::size_t close_line = line_;
+    const std::size_t close_col = column_;
+    consume("}}");
+    tokens.emplace_back(TokenType::VariableClose, "}}", close_line, close_col);
+
     return tokens;
   }
 
@@ -181,32 +213,51 @@ namespace vix::template_
     {
       skip_whitespace();
 
-      if (std::isalpha(peek()) || peek() == '_')
+      if (starts_with("%}"))
+      {
+        break;
+      }
+
+      const char ch = peek();
+
+      if (is_identifier_start(ch))
       {
         tokens.push_back(read_identifier());
       }
-      else if (std::isdigit(peek()))
+      else if (std::isdigit(static_cast<unsigned char>(ch)))
       {
         tokens.push_back(read_number());
       }
-      else if (peek() == '"' || peek() == '\'')
+      else if (ch == '"' || ch == '\'')
       {
         tokens.push_back(read_string());
       }
-      else
+      else if (is_punctuation(ch))
+      {
+        tokens.push_back(read_punctuation());
+      }
+      else if (starts_operator())
       {
         tokens.push_back(read_operator());
+      }
+      else
+      {
+        throw LexerError("unexpected character inside block expression");
       }
 
       skip_whitespace();
     }
 
-    if (!consume("%}"))
+    if (!starts_with("%}"))
     {
       throw LexerError("unterminated block expression");
     }
 
-    tokens.emplace_back(TokenType::BlockClose, "%}", line_, column_);
+    const std::size_t close_line = line_;
+    const std::size_t close_col = column_;
+    consume("%}");
+    tokens.emplace_back(TokenType::BlockClose, "%}", close_line, close_col);
+
     return tokens;
   }
 
@@ -221,11 +272,10 @@ namespace vix::template_
   Token Lexer::read_identifier()
   {
     std::string value;
-    std::size_t start_line = line_;
-    std::size_t start_col = column_;
+    const std::size_t start_line = line_;
+    const std::size_t start_col = column_;
 
-    while (!eof() &&
-           (std::isalnum(static_cast<unsigned char>(peek())) || peek() == '_'))
+    while (!eof() && is_identifier_part(peek()))
     {
       value.push_back(advance());
     }
@@ -236,12 +286,34 @@ namespace vix::template_
   Token Lexer::read_number()
   {
     std::string value;
-    std::size_t start_line = line_;
-    std::size_t start_col = column_;
+    const std::size_t start_line = line_;
+    const std::size_t start_col = column_;
+    bool seen_dot = false;
 
-    while (!eof() && (std::isdigit(peek()) || peek() == '.'))
+    while (!eof())
     {
-      value.push_back(advance());
+      const char ch = peek();
+
+      if (std::isdigit(static_cast<unsigned char>(ch)))
+      {
+        value.push_back(advance());
+        continue;
+      }
+
+      if (ch == '.' && !seen_dot)
+      {
+        const char next = peek(1);
+        if (!std::isdigit(static_cast<unsigned char>(next)))
+        {
+          break;
+        }
+
+        seen_dot = true;
+        value.push_back(advance());
+        continue;
+      }
+
+      break;
     }
 
     return Token(TokenType::Number, std::move(value), start_line, start_col);
@@ -249,13 +321,54 @@ namespace vix::template_
 
   Token Lexer::read_string()
   {
-    char quote = advance(); // ' or "
+    const std::size_t start_line = line_;
+    const std::size_t start_col = column_;
+    const char quote = advance();
+
     std::string value;
-    std::size_t start_line = line_;
-    std::size_t start_col = column_;
 
     while (!eof() && peek() != quote)
     {
+      if (peek() == '\\')
+      {
+        advance();
+
+        if (eof())
+        {
+          throw LexerError("unterminated string literal");
+        }
+
+        const char escaped = advance();
+        switch (escaped)
+        {
+        case 'n':
+          value.push_back('\n');
+          break;
+
+        case 't':
+          value.push_back('\t');
+          break;
+
+        case '\\':
+          value.push_back('\\');
+          break;
+
+        case '\'':
+          value.push_back('\'');
+          break;
+
+        case '"':
+          value.push_back('"');
+          break;
+
+        default:
+          value.push_back(escaped);
+          break;
+        }
+
+        continue;
+      }
+
       value.push_back(advance());
     }
 
@@ -264,18 +377,147 @@ namespace vix::template_
       throw LexerError("unterminated string literal");
     }
 
-    advance(); // closing quote
+    advance();
 
     return Token(TokenType::String, std::move(value), start_line, start_col);
   }
 
   Token Lexer::read_operator()
   {
-    std::size_t start_line = line_;
-    std::size_t start_col = column_;
+    const std::size_t start_line = line_;
+    const std::size_t start_col = column_;
 
-    char c = advance();
-    return Token(TokenType::Operator, std::string(1, c), start_line, start_col);
+    if (starts_with("=="))
+    {
+      consume("==");
+      return Token(TokenType::Operator, "==", start_line, start_col);
+    }
+
+    if (starts_with("!="))
+    {
+      consume("!=");
+      return Token(TokenType::Operator, "!=", start_line, start_col);
+    }
+
+    if (starts_with("<="))
+    {
+      consume("<=");
+      return Token(TokenType::Operator, "<=", start_line, start_col);
+    }
+
+    if (starts_with(">="))
+    {
+      consume(">=");
+      return Token(TokenType::Operator, ">=", start_line, start_col);
+    }
+
+    if (starts_with("&&"))
+    {
+      consume("&&");
+      return Token(TokenType::Operator, "&&", start_line, start_col);
+    }
+
+    if (starts_with("||"))
+    {
+      consume("||");
+      return Token(TokenType::Operator, "||", start_line, start_col);
+    }
+
+    const char ch = peek();
+    switch (ch)
+    {
+    case '+':
+    case '-':
+    case '*':
+    case '/':
+    case '%':
+    case '<':
+    case '>':
+    case '!':
+    case '|':
+      advance();
+      return Token(TokenType::Operator, std::string(1, ch), start_line, start_col);
+
+    default:
+      throw LexerError("unknown operator");
+    }
+  }
+
+  Token Lexer::read_punctuation()
+  {
+    const std::size_t start_line = line_;
+    const std::size_t start_col = column_;
+    const char ch = advance();
+
+    switch (ch)
+    {
+    case '(':
+    case ')':
+    case '.':
+    case ',':
+      return Token(TokenType::Punctuation, std::string(1, ch), start_line, start_col);
+
+    default:
+      throw LexerError("unknown punctuation");
+    }
+  }
+
+  bool Lexer::is_identifier_start(char ch) const noexcept
+  {
+    const unsigned char uch = static_cast<unsigned char>(ch);
+    return std::isalpha(uch) != 0 || ch == '_';
+  }
+
+  bool Lexer::is_identifier_part(char ch) const noexcept
+  {
+    const unsigned char uch = static_cast<unsigned char>(ch);
+    return std::isalnum(uch) != 0 || ch == '_';
+  }
+
+  bool Lexer::is_punctuation(char ch) const noexcept
+  {
+    switch (ch)
+    {
+    case '(':
+    case ')':
+    case '.':
+    case ',':
+      return true;
+
+    default:
+      return false;
+    }
+  }
+
+  bool Lexer::starts_operator() const noexcept
+  {
+    if (eof())
+    {
+      return false;
+    }
+
+    if (starts_with("==") || starts_with("!=") || starts_with("<=") ||
+        starts_with(">=") || starts_with("&&") || starts_with("||"))
+    {
+      return true;
+    }
+
+    switch (peek())
+    {
+    case '+':
+    case '-':
+    case '*':
+    case '/':
+    case '%':
+    case '<':
+    case '>':
+    case '!':
+    case '|':
+      return true;
+
+    default:
+      return false;
+    }
   }
 
   void Lexer::append_eof(std::vector<Token> &tokens) const

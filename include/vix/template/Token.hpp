@@ -18,6 +18,7 @@
 
 #include <cstddef>
 #include <string>
+#include <utility>
 
 namespace vix::template_
 {
@@ -26,16 +27,17 @@ namespace vix::template_
    */
   enum class TokenType
   {
-    Text,          // raw text
-    VariableOpen,  // {{
-    VariableClose, // }}
-    BlockOpen,     // {%
-    BlockClose,    // %}
-    Identifier,    // variable names, keywords
-    String,        // "text"
-    Number,        // 123, 3.14
-    Operator,      // ==, !=, +, -, etc.
-    EndOfFile
+    Text,          ///< Raw text outside template delimiters.
+    VariableOpen,  ///< {{
+    VariableClose, ///< }}
+    BlockOpen,     ///< {%
+    BlockClose,    ///< %}
+    Identifier,    ///< Variable names and keywords.
+    String,        ///< "text"
+    Number,        ///< 123, 3.14
+    Operator,      ///< ==, !=, +, -, *, /, &&, ||, |, etc.
+    Punctuation,   ///< (, ), ., ,
+    EndOfFile      ///< End of input.
   };
 
   /**
