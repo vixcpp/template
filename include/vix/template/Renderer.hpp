@@ -17,8 +17,11 @@
 #define VIX_TEMPLATE_RENDERER_HPP
 
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 #include <vix/template/AST.hpp>
+#include <vix/template/Builtins.hpp>
 #include <vix/template/Context.hpp>
 #include <vix/template/RenderResult.hpp>
 
@@ -30,12 +33,16 @@ namespace vix::template_
    * Renderer walks the parsed AST and produces the final textual output
    * using the provided runtime context.
    *
-   * Supported V1 nodes:
+   * Supported V2 nodes:
    * - RootNode
    * - TextNode
    * - VariableNode
    * - IfNode
    * - ForNode
+   *
+   * Variable nodes may include a filter pipeline such as:
+   * - {{ name | upper }}
+   * - {{ items | length }}
    */
   class Renderer
   {
@@ -96,6 +103,9 @@ namespace vix::template_
     /**
      * @brief Render a variable node.
      *
+     * Variable rendering resolves the source variable, applies filters
+     * in declaration order, then converts the final value to string.
+     *
      * @param node Variable node.
      * @param context Runtime rendering context.
      * @param output Output string buffer.
@@ -140,11 +150,37 @@ namespace vix::template_
         const std::string &name,
         const Context &context) const noexcept;
 
+    /**
+     * @brief Apply a filter pipeline to a value.
+     *
+     * Filters are applied from left to right.
+     *
+     * Example:
+     * {{ name | upper | length }}
+     *
+     * This means:
+     * 1. resolve name
+     * 2. apply upper
+     * 3. apply length
+     *
+     * @param input Initial value.
+     * @param filters Ordered filter pipeline.
+     * @return Transformed value.
+     */
+    [[nodiscard]] Value apply_filters(
+        const Value &input,
+        const std::vector<FilterNode> &filters) const;
+
   private:
     /**
      * @brief Whether HTML escaping is enabled for variable output.
      */
     bool auto_escape_html_{true};
+
+    /**
+     * @brief Built-in filter registry.
+     */
+    std::unordered_map<std::string, Filter> filters_;
   };
 
 } // namespace vix::template_

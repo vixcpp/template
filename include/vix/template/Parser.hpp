@@ -30,9 +30,11 @@ namespace vix::template_
    * Parser consumes the token stream produced by Lexer and builds
    * a structured AST representation of the template.
    *
-   * Supported V1 constructs:
+   * Supported V2 constructs:
    * - plain text
    * - variable interpolation: {{ name }}
+   * - filtered variable interpolation: {{ name | upper }}
+   * - chained filters: {{ name | upper | length }}
    * - if blocks: {% if cond %} ... {% endif %}
    * - for blocks: {% for item in items %} ... {% endfor %}
    */
@@ -146,12 +148,24 @@ namespace vix::template_
     /**
      * @brief Parse a variable interpolation node.
      *
-     * Expected form:
+     * Expected forms:
      * {{ identifier }}
+     * {{ identifier | filter }}
+     * {{ identifier | filter1 | filter2 }}
      *
      * @return Parsed variable node.
      */
     [[nodiscard]] NodePtr parse_variable();
+
+    /**
+     * @brief Parse a filter pipeline attached to a variable expression.
+     *
+     * Expected form:
+     * | filter_name | other_filter
+     *
+     * @return Ordered filter list.
+     */
+    [[nodiscard]] std::vector<FilterNode> parse_filters();
 
     /**
      * @brief Parse a block expression.

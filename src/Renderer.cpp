@@ -20,7 +20,8 @@
 namespace vix::template_
 {
   Renderer::Renderer(bool auto_escape_html)
-      : auto_escape_html_(auto_escape_html)
+      : auto_escape_html_(auto_escape_html),
+        filters_(Builtins::filters())
   {
   }
 
@@ -98,12 +99,11 @@ namespace vix::template_
       std::string &output) const
   {
     const Value *value = resolve_variable(node.name(), context);
-    if (value == nullptr)
-    {
-      return;
-    }
 
-    std::string rendered = value->to_string();
+    const Value initial = (value != nullptr) ? *value : Value{};
+    Value transformed = apply_filters(initial, node.filters());
+
+    std::string rendered = transformed.to_string();
     if (auto_escape_html_)
     {
       rendered = Escape::html(rendered);
@@ -172,6 +172,26 @@ namespace vix::template_
       const Context &context) const noexcept
   {
     return context.get(name);
+  }
+
+  Value Renderer::apply_filters(
+      const Value &input,
+      const std::vector<FilterNode> &filters) const
+  {
+    Value current = input;
+
+    for (const auto &filter : filters)
+    {
+      const auto it = filters_.find(filter.name());
+      if (it == filters_.end())
+      {
+        throw RendererError("unknown filter: " + filter.name());
+      }
+
+      current = it->second(current);
+    }
+
+    return current;
   }
 
 } // namespace vix::template_

@@ -59,6 +59,38 @@ static void test_parse_variable()
       static_cast<const VariableNode *>(root.children()[1].get());
 
   assert(var->name() == "name");
+  assert(var->filters().empty());
+}
+
+static void test_parse_variable_with_one_filter()
+{
+  RootNode root = parse_template("{{ name | upper }}");
+
+  assert(root.children().size() == 1);
+  assert(root.children()[0]->type() == NodeType::Variable);
+
+  const auto *var =
+      static_cast<const VariableNode *>(root.children()[0].get());
+
+  assert(var->name() == "name");
+  assert(var->filters().size() == 1);
+  assert(var->filters()[0].name() == "upper");
+}
+
+static void test_parse_variable_with_multiple_filters()
+{
+  RootNode root = parse_template("{{ name | upper | length }}");
+
+  assert(root.children().size() == 1);
+  assert(root.children()[0]->type() == NodeType::Variable);
+
+  const auto *var =
+      static_cast<const VariableNode *>(root.children()[0].get());
+
+  assert(var->name() == "name");
+  assert(var->filters().size() == 2);
+  assert(var->filters()[0].name() == "upper");
+  assert(var->filters()[1].name() == "length");
 }
 
 static void test_parse_if()
@@ -100,6 +132,7 @@ static void test_parse_for()
       static_cast<const VariableNode *>(for_node->body()[0].get());
 
   assert(var->name() == "item");
+  assert(var->filters().empty());
 }
 
 static void test_parse_nested_if_in_for()
@@ -128,6 +161,8 @@ int main()
 {
   test_parse_text();
   test_parse_variable();
+  test_parse_variable_with_one_filter();
+  test_parse_variable_with_multiple_filters();
   test_parse_if();
   test_parse_for();
   test_parse_nested_if_in_for();

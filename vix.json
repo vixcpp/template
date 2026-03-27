@@ -1,0 +1,34 @@
+{
+  "name": "template",
+  "namespace": "vix",
+  "version": "0.2.3",
+  "type": "library",
+  "include": "include",
+  "license": "MIT",
+  "description": "Lightweight C++ template engine for Vix with filters, control flow, and fast rendering.",
+  "keywords": [
+    "vix",
+    "template",
+    "engine",
+    "rendering",
+    "html",
+    "text",
+    "templates",
+    "filters",
+    "parser",
+    "lexer",
+    "ast",
+    "c++",
+    "cpp",
+    "c++20",
+    "library"
+  ],
+  "repository": "https://github.com/vixcpp/template",
+  "authors": [
+    {
+      "name": "Gaspard Kirira",
+      "github": "Gaspardkirira"
+    }
+  ],
+  "deps": []
+}

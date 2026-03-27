@@ -18,6 +18,7 @@
 
 #include <memory>
 #include <utility>
+#include <vector>
 
 namespace vix::template_
 {
@@ -59,6 +60,7 @@ namespace vix::template_
     {
       ++pos_;
     }
+
     return token;
   }
 
@@ -140,9 +142,27 @@ namespace vix::template_
     const Token &name =
         expect(TokenType::Identifier, "expected identifier inside variable expression");
 
+    std::vector<FilterNode> filters = parse_filters();
+
     expect(TokenType::VariableClose, "expected '}}'");
 
-    return std::make_unique<VariableNode>(name.value);
+    return std::make_unique<VariableNode>(name.value, std::move(filters));
+  }
+
+  std::vector<FilterNode> Parser::parse_filters()
+  {
+    std::vector<FilterNode> filters;
+
+    while (check(TokenType::Operator, "|"))
+    {
+      advance();
+
+      const Token &filter_name =
+          expect(TokenType::Identifier, "expected filter name after '|'");
+      filters.emplace_back(filter_name.value);
+    }
+
+    return filters;
   }
 
   NodePtr Parser::parse_block()

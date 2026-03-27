@@ -17,10 +17,10 @@
 #include <iostream>
 #include <string>
 
+#include <vix/template/Context.hpp>
 #include <vix/template/Lexer.hpp>
 #include <vix/template/Parser.hpp>
 #include <vix/template/Renderer.hpp>
-#include <vix/template/Context.hpp>
 
 using namespace vix::template_;
 
@@ -118,6 +118,73 @@ static void test_html_escape()
   assert(out == "&lt;b&gt;test&lt;/b&gt;");
 }
 
+static void test_render_upper_filter()
+{
+  Context ctx;
+  ctx.set("name", "Alice");
+
+  const std::string out = render("{{ name | upper }}", ctx);
+  assert(out == "ALICE");
+}
+
+static void test_render_lower_filter()
+{
+  Context ctx;
+  ctx.set("name", "ALICE");
+
+  const std::string out = render("{{ name | lower }}", ctx);
+  assert(out == "alice");
+}
+
+static void test_render_length_filter_on_string()
+{
+  Context ctx;
+  ctx.set("name", "Alice");
+
+  const std::string out = render("{{ name | length }}", ctx);
+  assert(out == "5");
+}
+
+static void test_render_length_filter_on_array()
+{
+  Context ctx;
+  Array arr;
+  arr.emplace_back("A");
+  arr.emplace_back("B");
+  arr.emplace_back("C");
+
+  ctx.set("items", arr);
+
+  const std::string out = render("{{ items | length }}", ctx);
+  assert(out == "3");
+}
+
+static void test_render_chained_filters()
+{
+  Context ctx;
+  ctx.set("name", "Alice");
+
+  const std::string out = render("{{ name | upper | length }}", ctx);
+  assert(out == "5");
+}
+
+static void test_render_default_filter_on_missing_variable()
+{
+  Context ctx;
+
+  const std::string out = render("{{ missing | default }}", ctx);
+  assert(out == "");
+}
+
+static void test_render_default_filter_on_empty_string()
+{
+  Context ctx;
+  ctx.set("name", "");
+
+  const std::string out = render("{{ name | default }}", ctx);
+  assert(out == "");
+}
+
 int main()
 {
   test_render_text();
@@ -128,6 +195,13 @@ int main()
   test_render_for();
   test_render_nested();
   test_html_escape();
+  test_render_upper_filter();
+  test_render_lower_filter();
+  test_render_length_filter_on_string();
+  test_render_length_filter_on_array();
+  test_render_chained_filters();
+  test_render_default_filter_on_missing_variable();
+  test_render_default_filter_on_empty_string();
 
   std::cout << "[OK] template renderer tests passed\n";
   return 0;

@@ -53,6 +53,50 @@ namespace vix::template_
   using NodeList = std::vector<NodePtr>;
 
   /**
+   * @brief Filter node attached to a variable interpolation.
+   *
+   * Example:
+   * {{ name | upper | length }}
+   *
+   * In this example:
+   * - upper is one FilterNode
+   * - length is another FilterNode
+   *
+   * V2 keeps filters simple:
+   * - filter name only
+   * - no arguments yet
+   */
+  class FilterNode
+  {
+  public:
+    /**
+     * @brief Construct a filter node.
+     *
+     * @param name Filter name.
+     */
+    explicit FilterNode(std::string name)
+        : name_(std::move(name))
+    {
+    }
+
+    /**
+     * @brief Get the filter name.
+     *
+     * @return Filter name.
+     */
+    [[nodiscard]] const std::string &name() const noexcept
+    {
+      return name_;
+    }
+
+  private:
+    /**
+     * @brief Filter name.
+     */
+    std::string name_;
+  };
+
+  /**
    * @brief Base class for all AST nodes.
    */
   class Node
@@ -190,19 +234,33 @@ namespace vix::template_
   /**
    * @brief Variable interpolation node.
    *
-   * Example:
+   * Examples:
    * {{ user }}
+   * {{ user | upper }}
+   * {{ items | length }}
    */
   class VariableNode final : public Node
   {
   public:
     /**
-     * @brief Construct a variable node.
+     * @brief Construct a variable node without filters.
      *
      * @param name Variable name.
      */
     explicit VariableNode(std::string name)
         : name_(std::move(name))
+    {
+    }
+
+    /**
+     * @brief Construct a variable node with filters.
+     *
+     * @param name Variable name.
+     * @param filters Filter pipeline.
+     */
+    VariableNode(std::string name, std::vector<FilterNode> filters)
+        : name_(std::move(name)),
+          filters_(std::move(filters))
     {
     }
 
@@ -226,11 +284,36 @@ namespace vix::template_
       return name_;
     }
 
+    /**
+     * @brief Get the filter pipeline.
+     *
+     * @return Ordered list of filters to apply.
+     */
+    [[nodiscard]] const std::vector<FilterNode> &filters() const noexcept
+    {
+      return filters_;
+    }
+
+    /**
+     * @brief Check whether the variable has filters.
+     *
+     * @return True if one or more filters are attached.
+     */
+    [[nodiscard]] bool has_filters() const noexcept
+    {
+      return !filters_.empty();
+    }
+
   private:
     /**
      * @brief Variable name to resolve from the rendering context.
      */
     std::string name_;
+
+    /**
+     * @brief Ordered filter pipeline.
+     */
+    std::vector<FilterNode> filters_;
   };
 
   /**
