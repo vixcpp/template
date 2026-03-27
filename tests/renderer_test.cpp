@@ -56,6 +56,27 @@ static std::string render(
   return compiled.render(ctx, auto_escape_html).output;
 }
 
+struct TestStreamOutput
+{
+  std::string buffer;
+
+  void write(const std::string &chunk)
+  {
+    buffer += chunk;
+  }
+};
+
+static std::string render_stream_output(
+    const std::string &tpl,
+    const Context &ctx,
+    bool auto_escape_html = true)
+{
+  Template compiled = compile_template(tpl);
+  TestStreamOutput out;
+  compiled.render_stream(ctx, out, auto_escape_html);
+  return out.buffer;
+}
+
 static std::string render_with_loader(
     const std::string &tpl,
     const Context &ctx,
@@ -73,6 +94,27 @@ static std::string render_with_loader(
       signature);
 
   return compiled.render(ctx, auto_escape_html).output;
+}
+
+static std::string render_stream_with_loader(
+    const std::string &tpl,
+    const Context &ctx,
+    const std::shared_ptr<Loader> &loader,
+    bool auto_escape_html = true,
+    const std::string &name = "inline")
+{
+  const std::string signature =
+      loader ? loader->source_signature(name) : std::string{};
+
+  Template compiled = compile_template(
+      tpl,
+      loader,
+      name,
+      signature);
+
+  TestStreamOutput out;
+  compiled.render_stream(ctx, out, auto_escape_html);
+  return out.buffer;
 }
 
 static std::string render_with_loader_and_cache(
@@ -901,6 +943,94 @@ static void test_cache_invalidation_on_source_change()
   assert(cached->source_signature() == signature2);
 }
 
+static void test_render_stream_text()
+{
+  Context ctx;
+  const std::string out = render_stream_output("Hello world", ctx);
+  assert(out == "Hello world");
+}
+
+static void test_render_stream_variable()
+{
+  Context ctx;
+  ctx.set("name", "Alice");
+
+  const std::string out = render_stream_output("Hello {{ name }}", ctx);
+  assert(out == "Hello Alice");
+}
+
+static void test_render_stream_html_escape()
+{
+  Context ctx;
+  ctx.set("html", "<b>test</b>");
+
+  const std::string out = render_stream_output("{{ html }}", ctx);
+  assert(out == "&lt;b&gt;test&lt;/b&gt;");
+}
+
+static void test_render_stream_without_html_escape()
+{
+  Context ctx;
+  ctx.set("html", "<b>test</b>");
+
+  const std::string out = render_stream_output("{{ html }}", ctx, false);
+  assert(out == "<b>test</b>");
+}
+
+static void test_render_stream_if_true()
+{
+  Context ctx;
+  ctx.set("user", true);
+
+  const std::string out =
+      render_stream_output("{% if user %}OK{% endif %}", ctx);
+
+  assert(out == "OK");
+}
+
+static void test_render_stream_for()
+{
+  Context ctx;
+  Array arr;
+  arr.emplace_back("A");
+  arr.emplace_back("B");
+  arr.emplace_back("C");
+
+  ctx.set("items", arr);
+
+  const std::string out =
+      render_stream_output("{% for item in items %}{{ item }}{% endfor %}", ctx);
+
+  assert(out == "ABC");
+}
+
+static void test_render_stream_include_simple()
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set("header.html", "<header>Header</header>");
+
+  Context ctx;
+  const std::string out =
+      render_stream_with_loader("{% include \"header.html\" %}", ctx, loader);
+
+  assert(out == "<header>Header</header>");
+}
+
+static void test_render_stream_matches_classic_render()
+{
+  Context ctx;
+  ctx.set("name", "Alice");
+  ctx.set("price", 6);
+  ctx.set("quantity", 7);
+
+  const std::string tpl = "Hello {{ name }} = {{ price * quantity }}";
+
+  const std::string classic = render(tpl, ctx);
+  const std::string streamed = render_stream_output(tpl, ctx);
+
+  assert(classic == streamed);
+}
+
 int main()
 {
   test_render_text();
@@ -965,6 +1095,14 @@ int main()
   test_template_source_signature_is_preserved();
   test_cache_put_compiled_template();
   test_cache_invalidation_on_source_change();
+  test_render_stream_text();
+  test_render_stream_variable();
+  test_render_stream_html_escape();
+  test_render_stream_without_html_escape();
+  test_render_stream_if_true();
+  test_render_stream_for();
+  test_render_stream_include_simple();
+  test_render_stream_matches_classic_render();
 
   std::cout << "[OK] template renderer tests passed\n";
   return 0;

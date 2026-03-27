@@ -15,6 +15,7 @@
  */
 #include <benchmark/benchmark.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -31,6 +32,21 @@ using namespace vix::template_;
 
 namespace
 {
+  struct StreamBuffer
+  {
+    std::string output;
+
+    void write(const std::string &chunk)
+    {
+      output += chunk;
+    }
+
+    void clear() noexcept
+    {
+      output.clear();
+    }
+  };
+
   [[nodiscard]] Template compile_template(
       const std::string &name,
       const std::string &source,
@@ -97,6 +113,25 @@ static void BM_render_plain_text(benchmark::State &state)
 }
 BENCHMARK(BM_render_plain_text);
 
+static void BM_render_plain_text_stream(benchmark::State &state)
+{
+  const Template tpl = compile_template(
+      "plain_text_stream",
+      "Hello world. This is a simple static template used for benchmarking.");
+  const Context ctx;
+  StreamBuffer out;
+
+  for (auto _ : state)
+  {
+    out.clear();
+    tpl.render_stream(ctx, out);
+    benchmark::DoNotOptimize(out.output);
+  }
+
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_plain_text_stream);
+
 static void BM_render_variable(benchmark::State &state)
 {
   const Template tpl = compile_template(
@@ -113,6 +148,25 @@ static void BM_render_variable(benchmark::State &state)
   state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
 }
 BENCHMARK(BM_render_variable);
+
+static void BM_render_variable_stream(benchmark::State &state)
+{
+  const Template tpl = compile_template(
+      "variable_stream",
+      "Hello {{ name }}");
+  const Context ctx = make_basic_context();
+  StreamBuffer out;
+
+  for (auto _ : state)
+  {
+    out.clear();
+    tpl.render_stream(ctx, out);
+    benchmark::DoNotOptimize(out.output);
+  }
+
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_variable_stream);
 
 static void BM_render_expression(benchmark::State &state)
 {
@@ -131,6 +185,25 @@ static void BM_render_expression(benchmark::State &state)
 }
 BENCHMARK(BM_render_expression);
 
+static void BM_render_expression_stream(benchmark::State &state)
+{
+  const Template tpl = compile_template(
+      "expression_stream",
+      "{{ price * quantity }}");
+  const Context ctx = make_basic_context();
+  StreamBuffer out;
+
+  for (auto _ : state)
+  {
+    out.clear();
+    tpl.render_stream(ctx, out);
+    benchmark::DoNotOptimize(out.output);
+  }
+
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_expression_stream);
+
 static void BM_render_if(benchmark::State &state)
 {
   const Template tpl = compile_template(
@@ -148,6 +221,25 @@ static void BM_render_if(benchmark::State &state)
 }
 BENCHMARK(BM_render_if);
 
+static void BM_render_if_stream(benchmark::State &state)
+{
+  const Template tpl = compile_template(
+      "if_template_stream",
+      "{% if enabled %}Hello {{ name }}{% endif %}");
+  const Context ctx = make_basic_context();
+  StreamBuffer out;
+
+  for (auto _ : state)
+  {
+    out.clear();
+    tpl.render_stream(ctx, out);
+    benchmark::DoNotOptimize(out.output);
+  }
+
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_if_stream);
+
 static void BM_render_for_loop(benchmark::State &state)
 {
   const Template tpl = compile_template(
@@ -164,6 +256,25 @@ static void BM_render_for_loop(benchmark::State &state)
   state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
 }
 BENCHMARK(BM_render_for_loop);
+
+static void BM_render_for_loop_stream(benchmark::State &state)
+{
+  const Template tpl = compile_template(
+      "for_loop_stream",
+      "{% for item in items %}[{{ item }}]{% endfor %}");
+  const Context ctx = make_basic_context();
+  StreamBuffer out;
+
+  for (auto _ : state)
+  {
+    out.clear();
+    tpl.render_stream(ctx, out);
+    benchmark::DoNotOptimize(out.output);
+  }
+
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_for_loop_stream);
 
 static void BM_render_mixed_template(benchmark::State &state)
 {
@@ -186,6 +297,30 @@ static void BM_render_mixed_template(benchmark::State &state)
   state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
 }
 BENCHMARK(BM_render_mixed_template);
+
+static void BM_render_mixed_template_stream(benchmark::State &state)
+{
+  const Template tpl = compile_template(
+      "mixed_stream",
+      "Hello {{ user.name }}\n"
+      "{% if enabled %}"
+      "Role: {{ user.role }}\n"
+      "Total: {{ price * quantity }}\n"
+      "{% endif %}"
+      "Items: {% for item in items %}[{{ item | upper }}]{% endfor %}");
+  const Context ctx = make_basic_context();
+  StreamBuffer out;
+
+  for (auto _ : state)
+  {
+    out.clear();
+    tpl.render_stream(ctx, out);
+    benchmark::DoNotOptimize(out.output);
+  }
+
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_mixed_template_stream);
 
 static void BM_render_include(benchmark::State &state)
 {
@@ -212,6 +347,33 @@ static void BM_render_include(benchmark::State &state)
 }
 BENCHMARK(BM_render_include);
 
+static void BM_render_include_stream(benchmark::State &state)
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set("header.html", "Header {{ name }}\n");
+  loader->set(
+      "body.html",
+      "{% include \"header.html\" %}Total: {{ price * quantity }}");
+
+  const Template tpl = compile_template(
+      "include_template_stream",
+      "{% include \"body.html\" %}",
+      loader);
+
+  const Context ctx = make_basic_context();
+  StreamBuffer out;
+
+  for (auto _ : state)
+  {
+    out.clear();
+    tpl.render_stream(ctx, out);
+    benchmark::DoNotOptimize(out.output);
+  }
+
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_include_stream);
+
 static void BM_render_engine_cached_template(benchmark::State &state)
 {
   auto loader = std::make_shared<StringLoader>();
@@ -232,6 +394,29 @@ static void BM_render_engine_cached_template(benchmark::State &state)
   state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
 }
 BENCHMARK(BM_render_engine_cached_template);
+
+static void BM_render_engine_cached_template_stream(benchmark::State &state)
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set(
+      "profile.html",
+      "Hello {{ user.name }}\n"
+      "{% if enabled %}Role: {{ user.role }}{% endif %}");
+
+  Engine engine(loader);
+  const Context ctx = make_basic_context();
+  StreamBuffer out;
+
+  for (auto _ : state)
+  {
+    out.clear();
+    engine.render_stream("profile.html", ctx, out);
+    benchmark::DoNotOptimize(out.output);
+  }
+
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_engine_cached_template_stream);
 
 static void BM_render_engine_cached_include(benchmark::State &state)
 {
@@ -257,6 +442,33 @@ static void BM_render_engine_cached_include(benchmark::State &state)
   state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
 }
 BENCHMARK(BM_render_engine_cached_include);
+
+static void BM_render_engine_cached_include_stream(benchmark::State &state)
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set("header.html", "Header {{ name }}\n");
+  loader->set(
+      "body.html",
+      "{% include \"header.html\" %}Total: {{ price * quantity }}");
+  loader->set(
+      "page.html",
+      "{% include \"body.html\" %}\n"
+      "{% for item in items %}[{{ item | upper }}]{% endfor %}");
+
+  Engine engine(loader);
+  const Context ctx = make_basic_context();
+  StreamBuffer out;
+
+  for (auto _ : state)
+  {
+    out.clear();
+    engine.render_stream("page.html", ctx, out);
+    benchmark::DoNotOptimize(out.output);
+  }
+
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_engine_cached_include_stream);
 
 static void BM_render_engine_no_cache_include(benchmark::State &state)
 {
@@ -284,5 +496,34 @@ static void BM_render_engine_no_cache_include(benchmark::State &state)
   state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
 }
 BENCHMARK(BM_render_engine_no_cache_include);
+
+static void BM_render_engine_no_cache_include_stream(benchmark::State &state)
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set("header.html", "Header {{ name }}\n");
+  loader->set(
+      "body.html",
+      "{% include \"header.html\" %}Total: {{ price * quantity }}");
+  loader->set(
+      "page.html",
+      "{% include \"body.html\" %}\n"
+      "{% for item in items %}[{{ item | upper }}]{% endfor %}");
+
+  Engine engine(loader);
+  engine.set_cache_enabled(false);
+
+  const Context ctx = make_basic_context();
+  StreamBuffer out;
+
+  for (auto _ : state)
+  {
+    out.clear();
+    engine.render_stream("page.html", ctx, out);
+    benchmark::DoNotOptimize(out.output);
+  }
+
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_engine_no_cache_include_stream);
 
 BENCHMARK_MAIN();

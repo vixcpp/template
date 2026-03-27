@@ -25,6 +25,7 @@
 #include <vix/template/Loader.hpp>
 #include <vix/template/RenderResult.hpp>
 #include <vix/template/Template.hpp>
+#include <vix/template/Renderer.hpp>
 
 namespace vix::template_
 {
@@ -179,6 +180,59 @@ namespace vix::template_
      * @return Mutable environment reference.
      */
     [[nodiscard]] Environment &environment() noexcept;
+
+    /**
+     * @brief Render a template by name in streaming mode.
+     *
+     * This method loads the template, compiles it if needed, and writes
+     * rendered output incrementally to the provided output sink instead
+     * of building a full string in memory.
+     *
+     * @tparam Output Output sink type. Must provide a `write(const std::string&)`
+     * method.
+     *
+     * @param name Template name.
+     * @param context Runtime rendering context.
+     * @param out Output sink receiving rendered chunks.
+     */
+    template <typename Output>
+    void render_stream(
+        const std::string &name,
+        const Context &context,
+        Output &out)
+    {
+      const auto tpl = load_shared(name);
+
+      Renderer renderer(
+          auto_escape(),
+          environment_.loader(),
+          cache_enabled_ ? &cache_ : nullptr);
+
+      renderer.render_stream(tpl->plan(), context, out);
+    }
+
+    /**
+     * @brief Render a template by name in streaming mode from a raw object context.
+     *
+     * This overload builds a runtime Context from the provided object values
+     * and writes rendered output incrementally to the output sink.
+     *
+     * @tparam Output Output sink type. Must provide a `write(const std::string&)`
+     * method.
+     *
+     * @param name Template name.
+     * @param values Runtime rendering values.
+     * @param out Output sink receiving rendered chunks.
+     */
+    template <typename Output>
+    void render_stream(
+        const std::string &name,
+        const Object &values,
+        Output &out)
+    {
+      Context context(values);
+      render_stream(name, context, out);
+    }
 
   private:
     /**

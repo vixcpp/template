@@ -1,5 +1,70 @@
 # Changelog
 
+## v0.9.0
+
+### V9 – Streaming Renderer
+
+#### Goal
+
+Introduce a streaming rendering API to support incremental output and reduce memory usage for large templates.
+
+#### Features
+
+- Added `render_stream(...)` API across the rendering pipeline:
+  - `Template::render_stream`
+  - `Engine::render_stream`
+  - `Renderer::render_stream`
+- Introduced streaming execution entrypoint in `ExecutionPlan`
+- Output can now be written incrementally to a custom sink (`write(std::string)`)
+
+#### Architecture
+
+- Streaming rendering is implemented without breaking the existing execution model
+- `ExecutionPlan` delegates execution to `Renderer` for consistency
+- Classic rendering (`std::string` buffer) remains unchanged and fully supported
+- Streaming path reuses the same execution logic to guarantee identical output
+
+#### Benchmarks
+
+- Added streaming benchmarks for all major rendering scenarios:
+  - plain text
+  - variables
+  - expressions
+  - conditionals
+  - loops
+  - includes
+  - engine (cached / non-cached)
+
+- Results show:
+  - near-zero overhead compared to classic rendering
+  - identical performance characteristics in most cases
+  - no regression introduced by streaming API
+
+#### Tests
+
+- Added streaming rendering tests:
+  - text rendering
+  - variable rendering
+  - HTML escaping
+  - conditionals and loops
+  - includes
+  - equivalence check between `render` and `render_stream`
+
+#### Notes
+
+- Current implementation streams at the API level while internally using a buffer
+- This ensures correctness and stability before introducing instruction-level streaming
+- Future versions will:
+  - eliminate intermediate buffers
+  - enable true chunk-by-chunk rendering
+  - support real-time streaming (HTTP, WebSocket)
+
+#### Outcome
+
+- Enables incremental rendering API
+- Prepares the engine for real-time and large-scale rendering use cases
+- Lays the foundation for true streaming execution in future versions
+
 ## v0.8.0
 
 Make rendering truly compiled by eliminating runtime expression parsing.

@@ -67,6 +67,7 @@ namespace vix::template_
      * @brief Block override map used during template inheritance.
      */
     using BlockMap = std::unordered_map<std::string, const BlockNode *>;
+    friend class ExecutionPlan;
 
     /**
      * @brief Construct a renderer.
@@ -131,6 +132,29 @@ namespace vix::template_
         const RootNode &root,
         const Context &context,
         const BlockMap &overrides) const;
+
+    /**
+     * @brief Render a compiled execution plan in streaming mode.
+     *
+     * This method executes the plan incrementally and writes output
+     * chunks directly to the provided output sink instead of building
+     * a full string in memory.
+     *
+     * @tparam Output Output sink type. Must provide a `write(const std::string&)`
+     * method.
+     *
+     * @param plan Compiled execution plan.
+     * @param context Runtime rendering context.
+     * @param out Output sink receiving rendered chunks.
+     */
+    template <typename Output>
+    void render_stream(
+        const ExecutionPlan &plan,
+        const Context &context,
+        Output &out) const
+    {
+      plan.execute_stream(*this, context, out);
+    }
 
   private:
     /**

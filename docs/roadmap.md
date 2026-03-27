@@ -178,8 +178,10 @@ Production-ready caching.
 - improved scalability
 
 ---
+## V8 - Optimisation
 
-## V8 – Streaming Renderer
+
+## V9 – Streaming Renderer
 
 ### Goal
 
@@ -198,7 +200,7 @@ Support incremental output.
 
 ---
 
-## V9 – Integration with Vix Runtime
+## V10 – Integration with Vix Runtime
 
 ### Goal
 

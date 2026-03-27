@@ -25,11 +25,10 @@
 #include <vix/template/ExecutionPlan.hpp>
 #include <vix/template/Loader.hpp>
 #include <vix/template/RenderResult.hpp>
+#include <vix/template/Renderer.hpp>
 
 namespace vix::template_
 {
-  class Renderer;
-
   /**
    * @brief Compiled template ready for rendering.
    *
@@ -158,6 +157,30 @@ namespace vix::template_
     [[nodiscard]] RenderResult render(
         const Context &context,
         bool auto_escape_html = true) const;
+
+    /**
+     * @brief Render the template in streaming mode.
+     *
+     * This method renders the compiled execution plan incrementally and writes
+     * output chunks directly to the provided output sink instead of building
+     * a full string in memory.
+     *
+     * @tparam Output Output sink type. Must provide a `write(const std::string&)`
+     * method.
+     *
+     * @param context Runtime render context.
+     * @param out Output sink receiving rendered chunks.
+     * @param auto_escape_html Whether variable output should be HTML-escaped.
+     */
+    template <typename Output>
+    void render_stream(
+        const Context &context,
+        Output &out,
+        bool auto_escape_html = true) const
+    {
+      Renderer renderer(auto_escape_html, loader_);
+      renderer.render_stream(plan_, context, out);
+    }
 
     /**
      * @brief Get the loader associated with this template.
