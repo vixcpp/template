@@ -32,7 +32,8 @@ namespace vix::template_
     Text,
     Variable,
     If,
-    For
+    For,
+    Include
   };
 
   class Node;
@@ -41,6 +42,7 @@ namespace vix::template_
   class VariableNode;
   class IfNode;
   class ForNode;
+  class IncludeNode;
 
   /**
    * @brief Owning pointer to an AST node.
@@ -480,6 +482,57 @@ namespace vix::template_
      * @brief Nodes rendered for each iteration.
      */
     NodeList body_;
+  };
+
+  /**
+   * @brief Include node.
+   *
+   * Example:
+   * {% include "header.html" %}
+   *
+   * V3 keeps includes simple:
+   * - static string target only
+   * - current context is reused
+   * - no custom include arguments yet
+   */
+  class IncludeNode final : public Node
+  {
+  public:
+    /**
+     * @brief Construct an include node.
+     *
+     * @param template_name Included template name.
+     */
+    explicit IncludeNode(std::string template_name)
+        : template_name_(std::move(template_name))
+    {
+    }
+
+    /**
+     * @brief Get the node type.
+     *
+     * @return NodeType::Include
+     */
+    [[nodiscard]] NodeType type() const noexcept override
+    {
+      return NodeType::Include;
+    }
+
+    /**
+     * @brief Get the included template name.
+     *
+     * @return Template name.
+     */
+    [[nodiscard]] const std::string &template_name() const noexcept
+    {
+      return template_name_;
+    }
+
+  private:
+    /**
+     * @brief Logical name of the included template.
+     */
+    std::string template_name_;
   };
 
 } // namespace vix::template_

@@ -21,6 +21,7 @@
 
 #include <vix/template/AST.hpp>
 #include <vix/template/Context.hpp>
+#include <vix/template/Loader.hpp>
 #include <vix/template/RenderResult.hpp>
 
 namespace vix::template_
@@ -33,6 +34,7 @@ namespace vix::template_
    * Template owns:
    * - the template logical name
    * - the parsed root AST
+   * - an optional loader used for include resolution
    *
    * It provides a simple rendering entry point that delegates
    * the actual output generation to Renderer.
@@ -50,8 +52,12 @@ namespace vix::template_
      *
      * @param name Logical template name.
      * @param root Parsed root AST.
+     * @param loader Optional loader used for include resolution.
      */
-    Template(std::string name, RootNode root);
+    Template(
+        std::string name,
+        RootNode root,
+        std::shared_ptr<Loader> loader = nullptr);
 
     /**
      * @brief Get the template logical name.
@@ -87,6 +93,13 @@ namespace vix::template_
         const Context &context,
         bool auto_escape_html = true) const;
 
+    /**
+     * @brief Get the loader associated with this template.
+     *
+     * @return Loader used for include resolution, or nullptr.
+     */
+    [[nodiscard]] const std::shared_ptr<Loader> &loader() const noexcept;
+
   private:
     /**
      * @brief Logical template name.
@@ -97,6 +110,11 @@ namespace vix::template_
      * @brief Parsed template AST root.
      */
     RootNode root_;
+
+    /**
+     * @brief Loader used for include resolution.
+     */
+    std::shared_ptr<Loader> loader_{nullptr};
   };
 
 } // namespace vix::template_

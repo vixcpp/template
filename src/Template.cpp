@@ -20,9 +20,13 @@
 
 namespace vix::template_
 {
-  Template::Template(std::string name, RootNode root)
+  Template::Template(
+      std::string name,
+      RootNode root,
+      std::shared_ptr<Loader> loader)
       : name_(std::move(name)),
-        root_(std::move(root))
+        root_(std::move(root)),
+        loader_(std::move(loader))
   {
   }
 
@@ -45,8 +49,13 @@ namespace vix::template_
       const Context &context,
       bool auto_escape_html) const
   {
-    Renderer renderer(auto_escape_html);
+    Renderer renderer(auto_escape_html, loader_);
     return renderer.render(root_, context);
+  }
+
+  const std::shared_ptr<Loader> &Template::loader() const noexcept
+  {
+    return loader_;
   }
 
 } // namespace vix::template_

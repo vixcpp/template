@@ -157,6 +157,40 @@ static void test_parse_nested_if_in_for()
   assert(if_node->body()[0]->type() == NodeType::Text);
 }
 
+static void test_parse_include()
+{
+  RootNode root = parse_template("{% include \"header.html\" %}");
+
+  assert(root.children().size() == 1);
+  assert(root.children()[0]->type() == NodeType::Include);
+
+  const auto *include_node =
+      static_cast<const IncludeNode *>(root.children()[0].get());
+
+  assert(include_node->template_name() == "header.html");
+}
+
+static void test_parse_include_with_surrounding_text()
+{
+  RootNode root = parse_template("Hello {% include \"header.html\" %} World");
+
+  assert(root.children().size() == 3);
+  assert(root.children()[0]->type() == NodeType::Text);
+  assert(root.children()[1]->type() == NodeType::Include);
+  assert(root.children()[2]->type() == NodeType::Text);
+
+  const auto *text_before =
+      static_cast<const TextNode *>(root.children()[0].get());
+  const auto *include_node =
+      static_cast<const IncludeNode *>(root.children()[1].get());
+  const auto *text_after =
+      static_cast<const TextNode *>(root.children()[2].get());
+
+  assert(text_before->value() == "Hello ");
+  assert(include_node->template_name() == "header.html");
+  assert(text_after->value() == " World");
+}
+
 int main()
 {
   test_parse_text();
@@ -166,6 +200,8 @@ int main()
   test_parse_if();
   test_parse_for();
   test_parse_nested_if_in_for();
+  test_parse_include();
+  test_parse_include_with_surrounding_text();
 
   std::cout << "[OK] template parser tests passed\n";
   return 0;

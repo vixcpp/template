@@ -15,12 +15,15 @@
  */
 #include <cassert>
 #include <iostream>
+#include <memory>
 #include <string>
 
 #include <vix/template/Context.hpp>
+#include <vix/template/Error.hpp>
 #include <vix/template/Lexer.hpp>
 #include <vix/template/Parser.hpp>
 #include <vix/template/Renderer.hpp>
+#include <vix/template/StringLoader.hpp>
 
 using namespace vix::template_;
 
@@ -33,6 +36,21 @@ static std::string render(const std::string &tpl, const Context &ctx)
   RootNode root = parser.parse();
 
   Renderer renderer(true);
+  return renderer.render(root, ctx).output;
+}
+
+static std::string render_with_loader(
+    const std::string &tpl,
+    const Context &ctx,
+    const std::shared_ptr<Loader> &loader)
+{
+  Lexer lexer(tpl);
+  auto tokens = lexer.tokenize();
+
+  Parser parser(std::move(tokens));
+  RootNode root = parser.parse();
+
+  Renderer renderer(true, loader);
   return renderer.render(root, ctx).output;
 }
 
@@ -185,6 +203,72 @@ static void test_render_default_filter_on_empty_string()
   assert(out == "");
 }
 
+static void test_render_include_simple()
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set("header.html", "<header>Header</header>");
+
+  Context ctx;
+  const std::string out =
+      render_with_loader("{% include \"header.html\" %}", ctx, loader);
+
+  assert(out == "<header>Header</header>");
+}
+
+static void test_render_include_with_context()
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set("header.html", "Hello {{ name }}");
+
+  Context ctx;
+  ctx.set("name", "Alice");
+
+  const std::string out =
+      render_with_loader("{% include \"header.html\" %}", ctx, loader);
+
+  assert(out == "Hello Alice");
+}
+
+static void test_render_include_missing_template()
+{
+  auto loader = std::make_shared<StringLoader>();
+
+  Context ctx;
+
+  bool thrown = false;
+  try
+  {
+    (void)render_with_loader("{% include \"missing.html\" %}", ctx, loader);
+  }
+  catch (const RendererError &)
+  {
+    thrown = true;
+  }
+
+  assert(thrown);
+}
+
+static void test_render_circular_include()
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set("a.html", "A {% include \"b.html\" %}");
+  loader->set("b.html", "B {% include \"a.html\" %}");
+
+  Context ctx;
+
+  bool thrown = false;
+  try
+  {
+    (void)render_with_loader("{% include \"a.html\" %}", ctx, loader);
+  }
+  catch (const RendererError &)
+  {
+    thrown = true;
+  }
+
+  assert(thrown);
+}
+
 int main()
 {
   test_render_text();
@@ -202,6 +286,10 @@ int main()
   test_render_chained_filters();
   test_render_default_filter_on_missing_variable();
   test_render_default_filter_on_empty_string();
+  test_render_include_simple();
+  test_render_include_with_context();
+  test_render_include_missing_template();
+  test_render_circular_include();
 
   std::cout << "[OK] template renderer tests passed\n";
   return 0;

@@ -16,6 +16,7 @@
 #ifndef VIX_TEMPLATE_RENDERER_HPP
 #define VIX_TEMPLATE_RENDERER_HPP
 
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -23,6 +24,7 @@
 #include <vix/template/AST.hpp>
 #include <vix/template/Builtins.hpp>
 #include <vix/template/Context.hpp>
+#include <vix/template/Loader.hpp>
 #include <vix/template/RenderResult.hpp>
 
 namespace vix::template_
@@ -33,16 +35,20 @@ namespace vix::template_
    * Renderer walks the parsed AST and produces the final textual output
    * using the provided runtime context.
    *
-   * Supported V2 nodes:
+   * Supported V3 nodes:
    * - RootNode
    * - TextNode
    * - VariableNode
    * - IfNode
    * - ForNode
+   * - IncludeNode
    *
    * Variable nodes may include a filter pipeline such as:
    * - {{ name | upper }}
    * - {{ items | length }}
+   *
+   * Include nodes allow template composition:
+   * - {% include "header.html" %}
    */
   class Renderer
   {
@@ -51,8 +57,11 @@ namespace vix::template_
      * @brief Construct a renderer.
      *
      * @param auto_escape_html Whether variable output should be HTML-escaped.
+     * @param loader Optional template loader used for include nodes.
      */
-    explicit Renderer(bool auto_escape_html = true);
+    explicit Renderer(
+        bool auto_escape_html = true,
+        std::shared_ptr<Loader> loader = nullptr);
 
     /**
      * @brief Render a parsed template tree.
@@ -140,6 +149,21 @@ namespace vix::template_
         std::string &output) const;
 
     /**
+     * @brief Render an include node.
+     *
+     * The included template is loaded through the configured Loader,
+     * parsed, and rendered with the same runtime context.
+     *
+     * @param node Include node.
+     * @param context Runtime rendering context.
+     * @param output Output string buffer.
+     */
+    void render_include(
+        const IncludeNode &node,
+        const Context &context,
+        std::string &output) const;
+
+    /**
      * @brief Resolve a variable from the current context.
      *
      * @param name Variable name.
@@ -171,6 +195,17 @@ namespace vix::template_
         const Value &input,
         const std::vector<FilterNode> &filters) const;
 
+    /**
+     * @brief Check whether a template is already being rendered.
+     *
+     * This is used to prevent circular includes.
+     *
+     * @param template_name Logical template name.
+     * @return True if the template is already on the include stack.
+     */
+    [[nodiscard]] bool is_in_include_stack(
+        const std::string &template_name) const noexcept;
+
   private:
     /**
      * @brief Whether HTML escaping is enabled for variable output.
@@ -181,6 +216,16 @@ namespace vix::template_
      * @brief Built-in filter registry.
      */
     std::unordered_map<std::string, Filter> filters_;
+
+    /**
+     * @brief Template loader used to resolve include nodes.
+     */
+    std::shared_ptr<Loader> loader_;
+
+    /**
+     * @brief Current include stack used to detect circular includes.
+     */
+    mutable std::vector<std::string> include_stack_;
   };
 
 } // namespace vix::template_

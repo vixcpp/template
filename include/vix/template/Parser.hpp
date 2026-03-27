@@ -37,6 +37,7 @@ namespace vix::template_
    * - chained filters: {{ name | upper | length }}
    * - if blocks: {% if cond %} ... {% endif %}
    * - for blocks: {% for item in items %} ... {% endfor %}
+   * - include blocks: {% include "header.html" %}
    */
   class Parser
   {
@@ -195,6 +196,16 @@ namespace vix::template_
      * @return Parsed for node.
      */
     [[nodiscard]] NodePtr parse_for();
+
+    /**
+     * @brief Parse an include block.
+     *
+     * Expected form:
+     * {% include "header.html" %}
+     *
+     * @return Parsed include node.
+     */
+    [[nodiscard]] NodePtr parse_include();
 
     /**
      * @brief Check whether the current position starts a closing endif block.

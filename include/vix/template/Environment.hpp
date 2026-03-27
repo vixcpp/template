@@ -31,6 +31,7 @@ namespace vix::template_
    * - template loading (via Loader)
    * - template compilation (Lexer + Parser)
    * - rendering defaults (escaping, etc.)
+   * - include resolution through the shared Loader
    *
    * It is the main entry point for loading templates by name.
    */

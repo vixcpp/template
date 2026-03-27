@@ -16,12 +16,20 @@
 #include <vix/template/Renderer.hpp>
 #include <vix/template/Escape.hpp>
 #include <vix/template/Error.hpp>
+#include <vix/template/Lexer.hpp>
+#include <vix/template/Parser.hpp>
+
+#include <algorithm>
+#include <utility>
 
 namespace vix::template_
 {
-  Renderer::Renderer(bool auto_escape_html)
+  Renderer::Renderer(
+      bool auto_escape_html,
+      std::shared_ptr<Loader> loader)
       : auto_escape_html_(auto_escape_html),
-        filters_(Builtins::filters())
+        filters_(Builtins::filters()),
+        loader_(std::move(loader))
   {
   }
 
@@ -63,6 +71,10 @@ namespace vix::template_
 
     case NodeType::For:
       render_for(static_cast<const ForNode &>(node), context, output);
+      break;
+
+    case NodeType::Include:
+      render_include(static_cast<const IncludeNode &>(node), context, output);
       break;
 
     default:
@@ -167,6 +179,51 @@ namespace vix::template_
     }
   }
 
+  void Renderer::render_include(
+      const IncludeNode &node,
+      const Context &context,
+      std::string &output) const
+  {
+    if (!loader_)
+    {
+      throw RendererError("include requires a configured loader");
+    }
+
+    const std::string &template_name = node.template_name();
+
+    if (is_in_include_stack(template_name))
+    {
+      throw RendererError("circular include detected: " + template_name);
+    }
+
+    if (!loader_->exists(template_name))
+    {
+      throw RendererError("included template not found: " + template_name);
+    }
+
+    include_stack_.push_back(template_name);
+
+    try
+    {
+      const std::string source = loader_->load(template_name);
+
+      Lexer lexer(source);
+      auto tokens = lexer.tokenize();
+
+      Parser parser(std::move(tokens));
+      RootNode root = parser.parse();
+
+      render_root(root, context, output);
+
+      include_stack_.pop_back();
+    }
+    catch (...)
+    {
+      include_stack_.pop_back();
+      throw;
+    }
+  }
+
   const Value *Renderer::resolve_variable(
       const std::string &name,
       const Context &context) const noexcept
@@ -192,6 +249,15 @@ namespace vix::template_
     }
 
     return current;
+  }
+
+  bool Renderer::is_in_include_stack(
+      const std::string &template_name) const noexcept
+  {
+    return std::find(
+               include_stack_.begin(),
+               include_stack_.end(),
+               template_name) != include_stack_.end();
   }
 
 } // namespace vix::template_

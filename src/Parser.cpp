@@ -165,9 +165,26 @@ namespace vix::template_
     return filters;
   }
 
+  NodePtr Parser::parse_include()
+  {
+    expect(TokenType::Identifier, "include", "expected 'include'");
+
+    const Token &template_name =
+        expect(TokenType::String, "expected string literal after 'include'");
+
+    expect(TokenType::BlockClose, "expected '%}' after include target");
+
+    return std::make_unique<IncludeNode>(template_name.value);
+  }
+
   NodePtr Parser::parse_block()
   {
     expect(TokenType::BlockOpen, "expected '{%'");
+
+    if (check(TokenType::Identifier, "include"))
+    {
+      return parse_include();
+    }
 
     if (check(TokenType::Identifier, "if"))
     {
