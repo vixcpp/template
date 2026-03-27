@@ -23,6 +23,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <utility>
+#include <variant>
 
 namespace vix::template_
 {
@@ -101,7 +102,9 @@ namespace vix::template_
       return seen_dot;
     }
 
-    [[nodiscard]] bool are_both_integers(const Value &lhs, const Value &rhs) noexcept
+    [[nodiscard]] bool are_both_integers(
+        const Value &lhs,
+        const Value &rhs) noexcept
     {
       return lhs.is_int() && rhs.is_int();
     }
@@ -117,6 +120,46 @@ namespace vix::template_
   }
 
   RenderResult Renderer::render(
+      const ExecutionPlan &plan,
+      const Context &context) const
+  {
+    RenderResult result;
+    result.escaped = auto_escape_html_;
+    result.from_cache = false;
+    result.success = true;
+
+    execute_plan(plan, context, result.output);
+    return result;
+  }
+
+  RenderResult Renderer::render(
+      const ExecutionPlan &plan,
+      const Context &context,
+      const BlockMap &overrides) const
+  {
+    RenderResult result;
+    result.escaped = auto_escape_html_;
+    result.from_cache = false;
+    result.success = true;
+
+    const BlockMap previous = block_overrides_;
+    block_overrides_ = overrides;
+
+    try
+    {
+      execute_plan(plan, context, result.output);
+    }
+    catch (...)
+    {
+      block_overrides_ = previous;
+      throw;
+    }
+
+    block_overrides_ = previous;
+    return result;
+  }
+
+  RenderResult Renderer::render(
       const RootNode &root,
       const Context &context) const
   {
@@ -126,16 +169,18 @@ namespace vix::template_
     result.success = true;
 
     const ExtendsNode *extends_node = find_extends(root);
-
     if (extends_node != nullptr)
     {
-      if (!loader_)
+      BlockMap merged = block_overrides_;
+      BlockMap child_blocks = collect_blocks(root);
+
+      for (const auto &[name, block] : child_blocks)
       {
-        throw RendererError("extends requires a configured loader");
+        merged[name] = block;
       }
 
       const BlockMap previous = block_overrides_;
-      block_overrides_ = collect_blocks(root);
+      block_overrides_ = merged;
 
       try
       {
@@ -154,20 +199,7 @@ namespace vix::template_
       return result;
     }
 
-    const BlockMap previous = block_overrides_;
-    block_overrides_.clear();
-
-    try
-    {
-      render_root(root, context, result.output);
-    }
-    catch (...)
-    {
-      block_overrides_ = previous;
-      throw;
-    }
-
-    block_overrides_ = previous;
+    render_node_list(root.children(), context, result.output);
     return result;
   }
 
@@ -186,7 +218,27 @@ namespace vix::template_
 
     try
     {
-      render_root(root, context, result.output);
+      const ExtendsNode *extends_node = find_extends(root);
+      if (extends_node != nullptr)
+      {
+        BlockMap merged = block_overrides_;
+        BlockMap child_blocks = collect_blocks(root);
+
+        for (const auto &[name, block] : child_blocks)
+        {
+          merged[name] = block;
+        }
+
+        block_overrides_ = merged;
+        render_template_by_name(
+            extends_node->template_name(),
+            context,
+            result.output);
+      }
+      else
+      {
+        render_node_list(root.children(), context, result.output);
+      }
     }
     catch (...)
     {
@@ -198,79 +250,134 @@ namespace vix::template_
     return result;
   }
 
-  void Renderer::render_node(
-      const Node &node,
+  void Renderer::execute_plan(
+      const ExecutionPlan &plan,
       const Context &context,
       std::string &output) const
   {
-    switch (node.type())
+    std::size_t instruction_index = 0;
+
+    while (instruction_index < plan.size())
     {
-    case NodeType::Root:
-      render_root(static_cast<const RootNode &>(node), context, output);
-      break;
+      execute_instruction(
+          plan[instruction_index],
+          instruction_index,
+          plan,
+          context,
+          output);
 
-    case NodeType::Text:
-      render_text(static_cast<const TextNode &>(node), output);
-      break;
-
-    case NodeType::Variable:
-      render_variable(static_cast<const VariableNode &>(node), context, output);
-      break;
-
-    case NodeType::If:
-      render_if(static_cast<const IfNode &>(node), context, output);
-      break;
-
-    case NodeType::For:
-      render_for(static_cast<const ForNode &>(node), context, output);
-      break;
-
-    case NodeType::Include:
-      render_include(static_cast<const IncludeNode &>(node), context, output);
-      break;
-
-    case NodeType::Block:
-      render_block(static_cast<const BlockNode &>(node), context, output);
-      break;
-
-    case NodeType::Extends:
-      break;
-
-    default:
-      throw RendererError("unsupported AST node type");
+      ++instruction_index;
     }
   }
 
-  void Renderer::render_root(
-      const RootNode &node,
+  void Renderer::execute_instruction(
+      const Instruction &instruction,
+      std::size_t &instruction_index,
+      const ExecutionPlan &plan,
       const Context &context,
       std::string &output) const
   {
-    for (const auto &child : node.children())
+    switch (instruction.op)
     {
-      if (!child)
+    case OpCode::EmitText:
+      execute_emit_text(
+          std::get<TextInstr>(instruction.data),
+          output);
+      return;
+
+    case OpCode::EmitVariable:
+      execute_emit_variable(
+          std::get<VariableInstr>(instruction.data),
+          context,
+          output);
+      return;
+
+    case OpCode::JumpIfFalse:
+      execute_jump_if_false(
+          std::get<JumpIfFalseInstr>(instruction.data),
+          instruction_index,
+          context);
+      return;
+
+    case OpCode::Jump:
+      execute_jump(
+          std::get<JumpInstr>(instruction.data),
+          instruction_index);
+      return;
+
+    case OpCode::ForEachBegin:
+    {
+      const auto &instr = std::get<ForEachInstr>(instruction.data);
+      const Value *iterable = resolve_variable(instr.iterable_name, context);
+
+      if (iterable == nullptr)
       {
-        throw RendererError("null child node in root");
+        instruction_index = instr.jump_end - 1;
+        return;
       }
 
-      render_node(*child, context, output);
+      if (!iterable->is_array())
+      {
+        throw RendererError("for loop iterable must be an array");
+      }
+
+      const std::size_t body_start = instruction_index + 1;
+      const std::size_t end_index = instr.jump_end;
+
+      for (const auto &item : iterable->as_array())
+      {
+        Context loop_context = context;
+        loop_context.set(instr.item_name, item);
+
+        std::size_t inner_index = body_start;
+        while (inner_index + 1 < end_index)
+        {
+          execute_instruction(
+              plan[inner_index],
+              inner_index,
+              plan,
+              loop_context,
+              output);
+
+          ++inner_index;
+        }
+      }
+
+      instruction_index = instr.jump_end - 1;
+      return;
     }
+
+    case OpCode::ForEachEnd:
+      execute_foreach_end(
+          std::get<JumpInstr>(instruction.data),
+          instruction_index);
+      return;
+
+    case OpCode::Include:
+      execute_include(
+          std::get<IncludeInstr>(instruction.data),
+          context,
+          output);
+      return;
+    }
+
+    throw RendererError("unsupported instruction opcode");
   }
 
-  void Renderer::render_text(
-      const TextNode &node,
+  void Renderer::execute_emit_text(
+      const TextInstr &instr,
       std::string &output) const
   {
-    output += node.value();
+    output += instr.text;
   }
 
-  void Renderer::render_variable(
-      const VariableNode &node,
+  void Renderer::execute_emit_variable(
+      const VariableInstr &instr,
       const Context &context,
       std::string &output) const
   {
-    Value current = evaluate_expression(node.expression(), context);
-    current = apply_filters(current, node.filters());
+    Value current = evaluate_compiled_expression(instr.expression, context);
+    current = apply_filters(current, instr.filters);
 
     std::string rendered = current.to_string();
     if (auto_escape_html_)
@@ -281,126 +388,79 @@ namespace vix::template_
     output += rendered;
   }
 
-  void Renderer::render_if(
-      const IfNode &node,
-      const Context &context,
-      std::string &output) const
+  void Renderer::execute_jump_if_false(
+      const JumpIfFalseInstr &instr,
+      std::size_t &instruction_index,
+      const Context &context) const
   {
-    const Value condition = evaluate_expression(node.condition(), context);
+    const Value condition = evaluate_compiled_expression(
+        instr.expression,
+        context);
+
     if (!is_truthy(condition))
     {
-      return;
-    }
-
-    render_node_list(node.body(), context, output);
-  }
-
-  void Renderer::render_for(
-      const ForNode &node,
-      const Context &context,
-      std::string &output) const
-  {
-    const Value *iterable = resolve_variable(node.iterable_name(), context);
-    if (iterable == nullptr)
-    {
-      return;
-    }
-
-    if (!iterable->is_array())
-    {
-      throw RendererError("for loop iterable must be an array");
-    }
-
-    for (const auto &item : iterable->as_array())
-    {
-      Context loop_context = context;
-      loop_context.set(node.item_name(), item);
-
-      render_node_list(node.body(), loop_context, output);
+      instruction_index = instr.target - 1;
     }
   }
 
-  void Renderer::render_include(
-      const IncludeNode &node,
-      const Context &context,
-      std::string &output) const
+  void Renderer::execute_jump(
+      const JumpInstr &instr,
+      std::size_t &instruction_index) const
   {
-    if (!loader_)
+    instruction_index = instr.target - 1;
+  }
+
+  void Renderer::execute_foreach_begin(
+      const ForEachInstr &instr,
+      std::size_t &instruction_index,
+      const Context &context) const
+  {
+    const Value *iterable = resolve_variable(instr.iterable_name, context);
+    if (iterable == nullptr || !iterable->is_array() || iterable->as_array().empty())
     {
-      throw RendererError("include requires a configured loader");
-    }
-
-    const std::string &template_name = node.template_name();
-
-    if (is_in_include_stack(template_name))
-    {
-      throw RendererError("circular include detected: " + template_name);
-    }
-
-    if (!loader_->exists(template_name))
-    {
-      throw RendererError("included template not found: " + template_name);
-    }
-
-    include_stack_.push_back(template_name);
-
-    try
-    {
-      const std::string source = loader_->load(template_name);
-
-      Lexer lexer(source);
-      auto tokens = lexer.tokenize();
-
-      Parser parser(std::move(tokens));
-      RootNode root = parser.parse();
-
-      render_root(root, context, output);
-
-      include_stack_.pop_back();
-    }
-    catch (...)
-    {
-      include_stack_.pop_back();
-      throw;
+      instruction_index = instr.jump_end - 1;
     }
   }
 
-  void Renderer::render_block(
-      const BlockNode &node,
-      const Context &context,
-      std::string &output) const
+  void Renderer::execute_foreach_end(
+      const JumpInstr & /*instr*/,
+      std::size_t & /*instruction_index*/) const
   {
-    const auto it = block_overrides_.find(node.name());
-
-    if (it != block_overrides_.end() && it->second != nullptr)
-    {
-      if (it->second == &node)
-      {
-        render_node_list(node.body(), context, output);
-        return;
-      }
-
-      render_node_list(it->second->body(), context, output);
-      return;
-    }
-
-    render_node_list(node.body(), context, output);
   }
 
-  void Renderer::render_node_list(
-      const NodeList &nodes,
+  void Renderer::execute_include(
+      const IncludeInstr &instr,
       const Context &context,
       std::string &output) const
   {
-    for (const auto &child : nodes)
-    {
-      if (!child)
-      {
-        throw RendererError("null child node in node list");
-      }
+    render_template_by_name(instr.template_name, context, output);
+  }
 
-      render_node(*child, context, output);
+  Value Renderer::evaluate_compiled_expression(
+      const std::string &expression_text,
+      const Context &context) const
+  {
+    const std::string source = "{{ " + expression_text + " }}";
+
+    Lexer lexer(source);
+    auto tokens = lexer.tokenize();
+
+    Parser parser(std::move(tokens));
+    RootNode root = parser.parse();
+
+    if (root.children().empty() || !root.children().front())
+    {
+      throw RendererError("compiled expression produced an empty AST");
     }
+
+    const Node &node = *root.children().front();
+    if (node.type() != NodeType::Variable)
+    {
+      throw RendererError("compiled expression did not produce a variable node");
+    }
+
+    const auto &variable = static_cast<const VariableNode &>(node);
+    return evaluate_expression(variable.expression(), context);
   }
 
   Value Renderer::evaluate_expression(
@@ -432,10 +492,9 @@ namespace vix::template_
       return evaluate_binary_expression(
           static_cast<const BinaryExpression &>(expr),
           context);
-
-    default:
-      throw RendererError("unsupported expression type");
     }
+
+    throw RendererError("unsupported expression type");
   }
 
   Value Renderer::evaluate_name_expression(
@@ -474,6 +533,20 @@ namespace vix::template_
     if (is_floating_literal(raw))
     {
       return Value(std::stod(raw));
+    }
+
+    if (raw.size() >= 2)
+    {
+      const char first = raw.front();
+      const char last = raw.back();
+
+      const bool is_double_quoted = first == '"' && last == '"';
+      const bool is_single_quoted = first == '\'' && last == '\'';
+
+      if (is_double_quoted || is_single_quoted)
+      {
+        return Value(raw.substr(1, raw.size() - 2));
+      }
     }
 
     return Value(raw);
@@ -807,7 +880,7 @@ namespace vix::template_
   {
     if (!loader_)
     {
-      throw RendererError("template inheritance requires a configured loader");
+      throw RendererError("template loading requires a configured loader");
     }
 
     if (is_in_include_stack(template_name))
@@ -850,16 +923,24 @@ namespace vix::template_
         const BlockMap previous = block_overrides_;
         block_overrides_ = merged;
 
-        render_template_by_name(
-            extends_node->template_name(),
-            context,
-            output);
+        try
+        {
+          render_template_by_name(
+              extends_node->template_name(),
+              context,
+              output);
+        }
+        catch (...)
+        {
+          block_overrides_ = previous;
+          throw;
+        }
 
         block_overrides_ = previous;
       }
       else
       {
-        render_root(root, context, output);
+        render_node_list(root.children(), context, output);
       }
 
       include_stack_.pop_back();
@@ -870,4 +951,136 @@ namespace vix::template_
       throw;
     }
   }
+
+  void Renderer::render_block(
+      const BlockNode &node,
+      const Context &context,
+      std::string &output) const
+  {
+    const auto it = block_overrides_.find(node.name());
+
+    if (it != block_overrides_.end() && it->second != nullptr)
+    {
+      if (it->second == &node)
+      {
+        render_node_list(node.body(), context, output);
+        return;
+      }
+
+      render_node_list(it->second->body(), context, output);
+      return;
+    }
+
+    render_node_list(node.body(), context, output);
+  }
+
+  void Renderer::render_node_list(
+      const NodeList &nodes,
+      const Context &context,
+      std::string &output) const
+  {
+    for (const auto &child : nodes)
+    {
+      if (!child)
+      {
+        throw RendererError("null child node in node list");
+      }
+
+      render_node(*child, context, output);
+    }
+  }
+
+  void Renderer::render_node(
+      const Node &node,
+      const Context &context,
+      std::string &output) const
+  {
+    switch (node.type())
+    {
+    case NodeType::Root:
+      render_node_list(
+          static_cast<const RootNode &>(node).children(),
+          context,
+          output);
+      return;
+
+    case NodeType::Text:
+      output += static_cast<const TextNode &>(node).value();
+      return;
+
+    case NodeType::Variable:
+    {
+      const auto &variable = static_cast<const VariableNode &>(node);
+      Value current = evaluate_expression(variable.expression(), context);
+      current = apply_filters(current, variable.filters());
+
+      std::string rendered = current.to_string();
+      if (auto_escape_html_)
+      {
+        rendered = Escape::html(rendered);
+      }
+
+      output += rendered;
+      return;
+    }
+
+    case NodeType::If:
+    {
+      const auto &if_node = static_cast<const IfNode &>(node);
+      const Value condition = evaluate_expression(if_node.condition(), context);
+
+      if (is_truthy(condition))
+      {
+        render_node_list(if_node.body(), context, output);
+      }
+
+      return;
+    }
+
+    case NodeType::For:
+    {
+      const auto &for_node = static_cast<const ForNode &>(node);
+      const Value *iterable = resolve_variable(for_node.iterable_name(), context);
+
+      if (iterable == nullptr)
+      {
+        return;
+      }
+
+      if (!iterable->is_array())
+      {
+        throw RendererError("for loop iterable must be an array");
+      }
+
+      for (const auto &item : iterable->as_array())
+      {
+        Context loop_context = context;
+        loop_context.set(for_node.item_name(), item);
+        render_node_list(for_node.body(), loop_context, output);
+      }
+
+      return;
+    }
+
+    case NodeType::Include:
+      render_template_by_name(
+          static_cast<const IncludeNode &>(node).template_name(),
+          context,
+          output);
+      return;
+
+    case NodeType::Block:
+      render_block(
+          static_cast<const BlockNode &>(node),
+          context,
+          output);
+      return;
+
+    case NodeType::Extends:
+      return;
+    }
+
+    throw RendererError("unsupported AST node type");
+  }
+
 } // namespace vix::template_

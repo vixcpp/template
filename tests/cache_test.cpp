@@ -20,6 +20,7 @@
 #include <string>
 
 #include <vix/template/Cache.hpp>
+#include <vix/template/ExecutionPlan.hpp>
 #include <vix/template/Template.hpp>
 
 using namespace vix::template_;
@@ -63,7 +64,10 @@ private:
 
 static TemplatePtr make_template(const std::string &name)
 {
-  return std::make_shared<Template>(name, RootNode{});
+  return std::make_shared<Template>(
+      name,
+      RootNode{},
+      ExecutionPlan{});
 }
 
 static void test_put_and_get()

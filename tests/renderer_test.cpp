@@ -17,20 +17,23 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <utility>
 
+#include <vix/template/Compiler.hpp>
 #include <vix/template/Context.hpp>
 #include <vix/template/Error.hpp>
 #include <vix/template/Lexer.hpp>
+#include <vix/template/Loader.hpp>
 #include <vix/template/Parser.hpp>
-#include <vix/template/Renderer.hpp>
 #include <vix/template/StringLoader.hpp>
+#include <vix/template/Template.hpp>
 
 using namespace vix::template_;
 
-static std::string render(
+static Template compile_template(
     const std::string &tpl,
-    const Context &ctx,
-    bool auto_escape_html = true)
+    const std::shared_ptr<Loader> &loader = nullptr,
+    const std::string &name = "inline")
 {
   Lexer lexer(tpl);
   auto tokens = lexer.tokenize();
@@ -38,8 +41,17 @@ static std::string render(
   Parser parser(std::move(tokens));
   RootNode root = parser.parse();
 
-  Renderer renderer(auto_escape_html);
-  return renderer.render(root, ctx).output;
+  Compiler compiler;
+  return compiler.compile(name, std::move(root), loader);
+}
+
+static std::string render(
+    const std::string &tpl,
+    const Context &ctx,
+    bool auto_escape_html = true)
+{
+  Template compiled = compile_template(tpl);
+  return compiled.render(ctx, auto_escape_html).output;
 }
 
 static std::string render_with_loader(
@@ -48,14 +60,8 @@ static std::string render_with_loader(
     const std::shared_ptr<Loader> &loader,
     bool auto_escape_html = true)
 {
-  Lexer lexer(tpl);
-  auto tokens = lexer.tokenize();
-
-  Parser parser(std::move(tokens));
-  RootNode root = parser.parse();
-
-  Renderer renderer(auto_escape_html, loader);
-  return renderer.render(root, ctx).output;
+  Template compiled = compile_template(tpl, loader);
+  return compiled.render(ctx, auto_escape_html).output;
 }
 
 static void test_render_text()

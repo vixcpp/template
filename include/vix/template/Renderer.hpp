@@ -16,6 +16,7 @@
 #ifndef VIX_TEMPLATE_RENDERER_HPP
 #define VIX_TEMPLATE_RENDERER_HPP
 
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -24,6 +25,7 @@
 #include <vix/template/AST.hpp>
 #include <vix/template/Builtins.hpp>
 #include <vix/template/Context.hpp>
+#include <vix/template/ExecutionPlan.hpp>
 #include <vix/template/Loader.hpp>
 #include <vix/template/RenderResult.hpp>
 #include <vix/template/Value.hpp>
@@ -31,38 +33,21 @@
 namespace vix::template_
 {
   /**
-   * @brief AST renderer for template output generation.
+   * @brief Execution-plan renderer for template output generation.
    *
-   * Renderer walks the parsed AST and produces the final textual output
-   * using the provided runtime context.
+   * In V6, Renderer executes a precomputed ExecutionPlan instead of
+   * traversing the AST recursively as the primary rendering path.
    *
-   * Supported nodes:
-   * - RootNode
-   * - TextNode
-   * - VariableNode
-   * - IfNode
-   * - ForNode
-   * - IncludeNode
-   * - ExtendsNode
-   * - BlockNode
+   * This design improves:
+   * - rendering speed
+   * - CPU efficiency
+   * - cache locality
    *
-   * V5 adds expression support:
-   * - {{ user.name }}
-   * - {{ price * quantity }}
-   * - {{ a == b }}
-   * - {% if price * quantity > 0 %} ... {% endif %}
-   *
-   * Variable nodes may still include a filter pipeline such as:
-   * - {{ name | upper }}
-   * - {{ items | length }}
-   * - {{ price * quantity | string }}
-   *
-   * Include nodes allow template composition:
-   * - {% include "header.html" %}
-   *
-   * Extends and block nodes allow layout inheritance:
-   * - {% extends "base.html" %}
-   * - {% block content %} ... {% endblock %}
+   * The AST is still used for:
+   * - expression evaluation
+   * - include / extends support
+   * - block inheritance
+   * - future advanced compilation features
    */
   class Renderer
   {
@@ -83,27 +68,35 @@ namespace vix::template_
         std::shared_ptr<Loader> loader = nullptr);
 
     /**
-     * @brief Render a parsed template tree.
+     * @brief Render a compiled execution plan.
      *
-     * @param root Parsed root AST node.
+     * @param plan Compiled execution plan.
      * @param context Runtime rendering context.
      * @return Final render result.
      */
     [[nodiscard]] RenderResult render(
-        const RootNode &root,
+        const ExecutionPlan &plan,
         const Context &context) const;
 
     /**
-     * @brief Render a parsed template tree with block overrides.
+     * @brief Render a compiled execution plan with block overrides.
      *
-     * This overload is mainly used internally to resolve template
-     * inheritance chains.
+     * This overload is mainly used internally for template inheritance.
      *
-     * @param root Parsed root AST node.
+     * @param plan Compiled execution plan.
      * @param context Runtime rendering context.
      * @param overrides Active block override map.
      * @return Final render result.
      */
+    [[nodiscard]] RenderResult render(
+        const ExecutionPlan &plan,
+        const Context &context,
+        const BlockMap &overrides) const;
+
+    [[nodiscard]] RenderResult render(
+        const RootNode &root,
+        const Context &context) const;
+
     [[nodiscard]] RenderResult render(
         const RootNode &root,
         const Context &context,
@@ -111,132 +104,132 @@ namespace vix::template_
 
   private:
     /**
-     * @brief Render a generic node into the output buffer.
+     * @brief Execute all instructions in a plan.
      *
-     * @param node AST node to render.
+     * @param plan Execution plan to execute.
      * @param context Runtime rendering context.
      * @param output Output string buffer.
      */
-    void render_node(
-        const Node &node,
+    void execute_plan(
+        const ExecutionPlan &plan,
         const Context &context,
         std::string &output) const;
 
     /**
-     * @brief Render a root node.
+     * @brief Execute a single instruction.
      *
-     * @param node Root node.
+     * @param instruction Instruction to execute.
+     * @param instruction_index Current instruction index.
+     * @param plan Execution plan being interpreted.
      * @param context Runtime rendering context.
      * @param output Output string buffer.
      */
-    void render_root(
-        const RootNode &node,
+    void execute_instruction(
+        const Instruction &instruction,
+        std::size_t &instruction_index,
+        const ExecutionPlan &plan,
         const Context &context,
         std::string &output) const;
 
     /**
-     * @brief Render a text node.
+     * @brief Execute a text emission instruction.
      *
-     * @param node Text node.
+     * @param instr Text instruction payload.
      * @param output Output string buffer.
      */
-    void render_text(
-        const TextNode &node,
+    void execute_emit_text(
+        const TextInstr &instr,
         std::string &output) const;
 
     /**
-     * @brief Render a variable node.
+     * @brief Execute a variable emission instruction.
      *
-     * Variable rendering in V5 works as follows:
-     * 1. evaluate the expression
-     * 2. apply filters from left to right
-     * 3. convert the final value to string
-     * 4. escape HTML if enabled
-     *
-     * @param node Variable node.
+     * @param instr Variable instruction payload.
      * @param context Runtime rendering context.
      * @param output Output string buffer.
      */
-    void render_variable(
-        const VariableNode &node,
+    void execute_emit_variable(
+        const VariableInstr &instr,
         const Context &context,
         std::string &output) const;
 
     /**
-     * @brief Render an if node.
+     * @brief Execute a conditional jump instruction.
      *
-     * The condition expression is evaluated first. If the result is truthy,
-     * the body is rendered.
+     * @param instr Conditional jump payload.
+     * @param instruction_index Mutable instruction pointer.
+     * @param context Runtime rendering context.
+     */
+    void execute_jump_if_false(
+        const JumpIfFalseInstr &instr,
+        std::size_t &instruction_index,
+        const Context &context) const;
+
+    /**
+     * @brief Execute an unconditional jump instruction.
      *
-     * @param node If node.
+     * @param instr Jump payload.
+     * @param instruction_index Mutable instruction pointer.
+     */
+    void execute_jump(
+        const JumpInstr &instr,
+        std::size_t &instruction_index) const;
+
+    /**
+     * @brief Execute a foreach-begin instruction.
+     *
+     * In V6 this hook prepares loop execution. The exact iteration strategy
+     * can evolve later without changing the public renderer interface.
+     *
+     * @param instr Loop begin payload.
+     * @param instruction_index Mutable instruction pointer.
+     * @param context Runtime rendering context.
+     */
+    void execute_foreach_begin(
+        const ForEachInstr &instr,
+        std::size_t &instruction_index,
+        const Context &context) const;
+
+    /**
+     * @brief Execute a foreach-end instruction.
+     *
+     * @param instr Loop end payload.
+     * @param instruction_index Mutable instruction pointer.
+     */
+    void execute_foreach_end(
+        const JumpInstr &instr,
+        std::size_t &instruction_index) const;
+
+    /**
+     * @brief Execute an include instruction.
+     *
+     * @param instr Include instruction payload.
      * @param context Runtime rendering context.
      * @param output Output string buffer.
      */
-    void render_if(
-        const IfNode &node,
+    void execute_include(
+        const IncludeInstr &instr,
         const Context &context,
         std::string &output) const;
 
     /**
-     * @brief Render a for node.
+     * @brief Evaluate an expression represented as text.
      *
-     * @param node For node.
+     * In V6, some compiled instructions keep a canonical textual expression
+     * representation produced by Compiler.
+     *
+     * @param expression_text Canonical expression string.
      * @param context Runtime rendering context.
-     * @param output Output string buffer.
+     * @return Evaluated value.
      */
-    void render_for(
-        const ForNode &node,
-        const Context &context,
-        std::string &output) const;
+    [[nodiscard]] Value evaluate_compiled_expression(
+        const std::string &expression_text,
+        const Context &context) const;
 
     /**
-     * @brief Render an include node.
+     * @brief Evaluate an expression AST node.
      *
-     * The included template is loaded through the configured Loader,
-     * parsed, and rendered with the same runtime context.
-     *
-     * @param node Include node.
-     * @param context Runtime rendering context.
-     * @param output Output string buffer.
-     */
-    void render_include(
-        const IncludeNode &node,
-        const Context &context,
-        std::string &output) const;
-
-    /**
-     * @brief Render a block node with override support.
-     *
-     * If an override exists for this block name from a child template,
-     * the override is rendered instead of the current block body.
-     *
-     * @param node Block node.
-     * @param context Runtime rendering context.
-     * @param output Output string buffer.
-     */
-    void render_block(
-        const BlockNode &node,
-        const Context &context,
-        std::string &output) const;
-
-    /**
-     * @brief Render a list of AST nodes.
-     *
-     * Utility used to render block bodies and nested structures.
-     *
-     * @param nodes List of nodes.
-     * @param context Runtime rendering context.
-     * @param output Output string buffer.
-     */
-    void render_node_list(
-        const NodeList &nodes,
-        const Context &context,
-        std::string &output) const;
-
-    /**
-     * @brief Evaluate an expression.
-     *
-     * This is the core V5 entry point for expression execution.
+     * This remains the core evaluation entry point for expression execution.
      *
      * @param expr Expression to evaluate.
      * @param context Runtime rendering context.
@@ -249,10 +242,6 @@ namespace vix::template_
     /**
      * @brief Evaluate a name expression.
      *
-     * Example:
-     * - user
-     * - price
-     *
      * @param expr Name expression.
      * @param context Runtime rendering context.
      * @return Evaluated value.
@@ -264,13 +253,6 @@ namespace vix::template_
     /**
      * @brief Evaluate a literal expression.
      *
-     * Examples:
-     * - 42
-     * - 3.14
-     * - true
-     * - false
-     * - "hello"
-     *
      * @param expr Literal expression.
      * @return Evaluated value.
      */
@@ -279,10 +261,6 @@ namespace vix::template_
 
     /**
      * @brief Evaluate a member access expression.
-     *
-     * Examples:
-     * - user.name
-     * - order.total
      *
      * @param expr Member expression.
      * @param context Runtime rendering context.
@@ -295,10 +273,6 @@ namespace vix::template_
     /**
      * @brief Evaluate a unary expression.
      *
-     * Examples:
-     * - !enabled
-     * - -price
-     *
      * @param expr Unary expression.
      * @param context Runtime rendering context.
      * @return Evaluated value.
@@ -309,11 +283,6 @@ namespace vix::template_
 
     /**
      * @brief Evaluate a binary expression.
-     *
-     * Examples:
-     * - price * quantity
-     * - a == b
-     * - total >= limit
      *
      * @param expr Binary expression.
      * @param context Runtime rendering context.
@@ -337,10 +306,6 @@ namespace vix::template_
     /**
      * @brief Resolve a member from a parent runtime value.
      *
-     * This is used for expression evaluation such as:
-     * - user.name
-     * - order.total
-     *
      * @param value Parent value.
      * @param member Member name.
      * @return Pointer to the resolved member value, or nullptr if missing.
@@ -351,16 +316,6 @@ namespace vix::template_
 
     /**
      * @brief Apply a filter pipeline to a value.
-     *
-     * Filters are applied from left to right.
-     *
-     * Example:
-     * {{ name | upper | length }}
-     *
-     * This means:
-     * 1. evaluate name
-     * 2. apply upper
-     * 3. apply length
      *
      * @param input Initial value.
      * @param filters Ordered filter pipeline.
@@ -373,8 +328,6 @@ namespace vix::template_
     /**
      * @brief Check whether a runtime value is truthy.
      *
-     * Used by condition evaluation and unary logical operations.
-     *
      * @param value Value to inspect.
      * @return True if the value is considered truthy.
      */
@@ -383,8 +336,6 @@ namespace vix::template_
     /**
      * @brief Convert a runtime value to a number when possible.
      *
-     * This helper is used by arithmetic and comparison operators.
-     *
      * @param value Input value.
      * @return Numeric representation.
      */
@@ -392,8 +343,6 @@ namespace vix::template_
 
     /**
      * @brief Check whether a template is already being rendered.
-     *
-     * This is used to prevent circular includes and inheritance loops.
      *
      * @param template_name Logical template name.
      * @return True if the template is already on the render stack.
@@ -413,8 +362,6 @@ namespace vix::template_
     /**
      * @brief Collect all block nodes from a template root.
      *
-     * Used to build the override map for template inheritance.
-     *
      * @param root Root AST node.
      * @return Map of block name to BlockNode pointer.
      */
@@ -432,6 +379,47 @@ namespace vix::template_
      */
     void render_template_by_name(
         const std::string &template_name,
+        const Context &context,
+        std::string &output) const;
+
+    /**
+     * @brief Render a block node with override support.
+     *
+     * @param node Block node.
+     * @param context Runtime rendering context.
+     * @param output Output string buffer.
+     */
+    void render_block(
+        const BlockNode &node,
+        const Context &context,
+        std::string &output) const;
+
+    /**
+     * @brief Render a list of AST nodes.
+     *
+     * Utility used for block rendering and compatibility paths.
+     *
+     * @param nodes List of nodes.
+     * @param context Runtime rendering context.
+     * @param output Output string buffer.
+     */
+    void render_node_list(
+        const NodeList &nodes,
+        const Context &context,
+        std::string &output) const;
+
+    /**
+     * @brief Render a generic AST node.
+     *
+     * This helper remains available for compatibility paths still based on
+     * direct AST rendering, especially for inheritance and transitional code.
+     *
+     * @param node AST node.
+     * @param context Runtime rendering context.
+     * @param output Output string buffer.
+     */
+    void render_node(
+        const Node &node,
         const Context &context,
         std::string &output) const;
 

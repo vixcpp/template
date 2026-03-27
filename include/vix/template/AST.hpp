@@ -655,6 +655,26 @@ namespace vix::template_
       return value_;
     }
 
+    /**
+     * @brief Get mutable text value.
+     *
+     * @return Mutable text reference.
+     */
+    [[nodiscard]] std::string &value() noexcept
+    {
+      return value_;
+    }
+
+    /**
+     * @brief Set text value.
+     *
+     * @param value New text.
+     */
+    void set_value(std::string value)
+    {
+      value_ = std::move(value);
+    }
+
   private:
     /**
      * @brief Raw text content.
@@ -830,6 +850,36 @@ namespace vix::template_
       return body_;
     }
 
+    /**
+     * @brief Get else body.
+     *
+     * @return Immutable else body.
+     */
+    [[nodiscard]] const NodeList &else_body() const noexcept
+    {
+      return else_body_;
+    }
+
+    /**
+     * @brief Get else body.
+     *
+     * @return Mutable else body.
+     */
+    [[nodiscard]] NodeList &else_body() noexcept
+    {
+      return else_body_;
+    }
+
+    /**
+     * @brief Check if else branch exists.
+     *
+     * @return True if else body is not empty.
+     */
+    [[nodiscard]] bool has_else() const noexcept
+    {
+      return !else_body_.empty();
+    }
+
   private:
     /**
      * @brief Condition expression.
@@ -840,6 +890,8 @@ namespace vix::template_
      * @brief Nodes rendered when the condition is truthy.
      */
     NodeList body_;
+
+    NodeList else_body_;
   };
 
   /**
@@ -1092,6 +1144,19 @@ namespace vix::template_
      * @return Mutable body.
      */
     [[nodiscard]] NodeList &body() noexcept
+    {
+      return body_;
+    }
+
+    /**
+     * @brief Alias for block children (for optimizer compatibility).
+     */
+    [[nodiscard]] const NodeList &children() const noexcept
+    {
+      return body_;
+    }
+
+    [[nodiscard]] NodeList &children() noexcept
     {
       return body_;
     }

@@ -21,6 +21,7 @@
 
 #include <vix/template/AST.hpp>
 #include <vix/template/Context.hpp>
+#include <vix/template/ExecutionPlan.hpp>
 #include <vix/template/Loader.hpp>
 #include <vix/template/RenderResult.hpp>
 
@@ -33,11 +34,18 @@ namespace vix::template_
    *
    * Template owns:
    * - the template logical name
-   * - the parsed root AST
+   * - the parsed and optimized AST root
+   * - the compiled execution plan
    * - an optional loader used for include resolution
    *
-   * It provides a simple rendering entry point that delegates
-   * the actual output generation to Renderer.
+   * In V6, rendering is intended to use the precomputed execution plan
+   * instead of traversing the AST recursively for each render call.
+   *
+   * The AST is still preserved because it remains useful for:
+   * - debugging
+   * - inspection
+   * - future compiler passes
+   * - advanced template features
    */
   class Template
   {
@@ -48,15 +56,17 @@ namespace vix::template_
     Template() = default;
 
     /**
-     * @brief Construct a template from a name and parsed AST root.
+     * @brief Construct a template from a name, AST root, and execution plan.
      *
      * @param name Logical template name.
-     * @param root Parsed root AST.
+     * @param root Parsed or optimized root AST.
+     * @param plan Compiled execution plan.
      * @param loader Optional loader used for include resolution.
      */
     Template(
         std::string name,
         RootNode root,
+        ExecutionPlan plan,
         std::shared_ptr<Loader> loader = nullptr);
 
     /**
@@ -74,9 +84,17 @@ namespace vix::template_
     [[nodiscard]] const RootNode &root() const noexcept;
 
     /**
+     * @brief Get the compiled execution plan.
+     *
+     * @return Immutable execution plan.
+     */
+    [[nodiscard]] const ExecutionPlan &plan() const noexcept;
+
+    /**
      * @brief Check whether the template is empty.
      *
-     * A template is considered empty when it has no child nodes.
+     * A template is considered empty when it has no instructions in its
+     * execution plan.
      *
      * @return True if empty.
      */
@@ -110,6 +128,11 @@ namespace vix::template_
      * @brief Parsed template AST root.
      */
     RootNode root_;
+
+    /**
+     * @brief Compiled execution plan.
+     */
+    ExecutionPlan plan_;
 
     /**
      * @brief Loader used for include resolution.

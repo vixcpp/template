@@ -14,6 +14,7 @@
  *
  */
 #include <vix/template/Environment.hpp>
+#include <vix/template/Compiler.hpp>
 #include <vix/template/Error.hpp>
 #include <vix/template/Lexer.hpp>
 #include <vix/template/Parser.hpp>
@@ -64,8 +65,9 @@ namespace vix::template_
     Parser parser(std::move(tokens));
     RootNode root = parser.parse();
 
-    // 4. Build template with loader support for includes
-    return Template(name, std::move(root), loader_);
+    // 4. Compilation
+    Compiler compiler;
+    return compiler.compile(name, std::move(root), loader_);
   }
 
   const std::shared_ptr<Loader> &Environment::loader() const noexcept

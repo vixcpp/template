@@ -13,71 +13,198 @@
  *  Vix.cpp
  *
  */
-#include <chrono>
-#include <iostream>
-#include <string>
+#include <benchmark/benchmark.h>
 
+#include <memory>
+#include <string>
+#include <utility>
+
+#include <vix/template/Compiler.hpp>
+#include <vix/template/Context.hpp>
 #include <vix/template/Lexer.hpp>
 #include <vix/template/Parser.hpp>
-#include <vix/template/Renderer.hpp>
-#include <vix/template/Context.hpp>
+#include <vix/template/StringLoader.hpp>
+#include <vix/template/Template.hpp>
 
 using namespace vix::template_;
 
-static RootNode build_ast(const std::string &tpl)
+namespace
 {
-  Lexer lexer(tpl);
-  auto tokens = lexer.tokenize();
-
-  Parser parser(std::move(tokens));
-  return parser.parse();
-}
-
-int main()
-{
-  const std::string tpl =
-      "<h1>{{ title }}</h1>\n"
-      "{% if user %}Hello {{ user }}{% endif %}\n"
-      "<ul>\n"
-      "{% for item in items %}<li>{{ item }}</li>{% endfor %}\n"
-      "</ul>";
-
-  // Build AST once (simulate compiled template)
-  RootNode root = build_ast(tpl);
-
-  // Prepare context
-  Context ctx;
-  ctx.set("title", "Benchmark");
-  ctx.set("user", "Gaspard");
-
-  Array items;
-  items.emplace_back("Laptop");
-  items.emplace_back("Phone");
-  items.emplace_back("Book");
-  ctx.set("items", items);
-
-  Renderer renderer(true);
-
-  const int iterations = 100000;
-
-  auto start = std::chrono::high_resolution_clock::now();
-
-  for (int i = 0; i < iterations; ++i)
+  [[nodiscard]] Template compile_template(
+      const std::string &name,
+      const std::string &source,
+      std::shared_ptr<Loader> loader = nullptr)
   {
-    auto result = renderer.render(root, ctx);
-    (void)result;
+    Lexer lexer(source);
+    auto tokens = lexer.tokenize();
+
+    Parser parser(std::move(tokens));
+    RootNode root = parser.parse();
+
+    Compiler compiler;
+    return compiler.compile(name, std::move(root), std::move(loader));
   }
 
-  auto end = std::chrono::high_resolution_clock::now();
+  [[nodiscard]] Context make_basic_context()
+  {
+    Context ctx;
+    ctx.set("name", "Alice");
+    ctx.set("bio", "offline-first systems");
+    ctx.set("price", 6);
+    ctx.set("quantity", 7);
+    ctx.set("enabled", true);
 
-  const auto duration =
-      std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    Object user;
+    user["name"] = Value("Alice");
+    user["role"] = Value("admin");
+    ctx.set("user", user);
 
-  std::cout << "Render benchmark\n";
-  std::cout << "Iterations: " << iterations << '\n';
-  std::cout << "Total time (ms): " << duration.count() << '\n';
-  std::cout << "Avg per render (us): "
-            << (duration.count() * 1000.0 / iterations) << '\n';
+    Array items;
+    items.emplace_back("Book");
+    items.emplace_back("Phone");
+    items.emplace_back("Pen");
+    items.emplace_back("Bag");
+    items.emplace_back("Mouse");
+    ctx.set("items", items);
 
-  return 0;
+    return ctx;
+  }
+
+} // namespace
+
+static void BM_render_plain_text(benchmark::State &state)
+{
+  const Template tpl = compile_template(
+      "plain_text",
+      "Hello world. This is a simple static template used for benchmarking.");
+  const Context ctx;
+
+  for (auto _ : state)
+  {
+    const RenderResult result = tpl.render(ctx);
+    benchmark::DoNotOptimize(result.output);
+  }
+
+  state.SetItemsProcessed(
+      static_cast<std::int64_t>(state.iterations()));
 }
+BENCHMARK(BM_render_plain_text);
+
+static void BM_render_variable(benchmark::State &state)
+{
+  const Template tpl = compile_template(
+      "variable",
+      "Hello {{ name }}");
+  const Context ctx = make_basic_context();
+
+  for (auto _ : state)
+  {
+    const RenderResult result = tpl.render(ctx);
+    benchmark::DoNotOptimize(result.output);
+  }
+
+  state.SetItemsProcessed(
+      static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_variable);
+
+static void BM_render_expression(benchmark::State &state)
+{
+  const Template tpl = compile_template(
+      "expression",
+      "{{ price * quantity }}");
+  const Context ctx = make_basic_context();
+
+  for (auto _ : state)
+  {
+    const RenderResult result = tpl.render(ctx);
+    benchmark::DoNotOptimize(result.output);
+  }
+
+  state.SetItemsProcessed(
+      static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_expression);
+
+static void BM_render_if(benchmark::State &state)
+{
+  const Template tpl = compile_template(
+      "if_template",
+      "{% if enabled %}Hello {{ name }}{% endif %}");
+  const Context ctx = make_basic_context();
+
+  for (auto _ : state)
+  {
+    const RenderResult result = tpl.render(ctx);
+    benchmark::DoNotOptimize(result.output);
+  }
+
+  state.SetItemsProcessed(
+      static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_if);
+
+static void BM_render_for_loop(benchmark::State &state)
+{
+  const Template tpl = compile_template(
+      "for_loop",
+      "{% for item in items %}[{{ item }}]{% endfor %}");
+  const Context ctx = make_basic_context();
+
+  for (auto _ : state)
+  {
+    const RenderResult result = tpl.render(ctx);
+    benchmark::DoNotOptimize(result.output);
+  }
+
+  state.SetItemsProcessed(
+      static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_for_loop);
+
+static void BM_render_mixed_template(benchmark::State &state)
+{
+  const Template tpl = compile_template(
+      "mixed",
+      "Hello {{ user.name }}\n"
+      "{% if enabled %}"
+      "Role: {{ user.role }}\n"
+      "Total: {{ price * quantity }}\n"
+      "{% endif %}"
+      "Items: {% for item in items %}[{{ item | upper }}]{% endfor %}");
+  const Context ctx = make_basic_context();
+
+  for (auto _ : state)
+  {
+    const RenderResult result = tpl.render(ctx);
+    benchmark::DoNotOptimize(result.output);
+  }
+
+  state.SetItemsProcessed(
+      static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_mixed_template);
+
+static void BM_render_include(benchmark::State &state)
+{
+  auto loader = std::make_shared<StringLoader>();
+  loader->set("header.html", "Header {{ name }}\n");
+  loader->set("body.html", "{% include \"header.html\" %}Total: {{ price * quantity }}");
+  const Template tpl = compile_template(
+      "include_template",
+      "{% include \"body.html\" %}",
+      loader);
+  const Context ctx = make_basic_context();
+
+  for (auto _ : state)
+  {
+    const RenderResult result = tpl.render(ctx);
+    benchmark::DoNotOptimize(result.output);
+  }
+
+  state.SetItemsProcessed(
+      static_cast<std::int64_t>(state.iterations()));
+}
+BENCHMARK(BM_render_include);
+
+BENCHMARK_MAIN();

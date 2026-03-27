@@ -52,6 +52,7 @@ add_library(template
   src/StringLoader.cpp
   src/Template.cpp
   src/Value.cpp
+  src/Optimizer.cpp
 )
 
 add_library(vix::template ALIAS template)
@@ -115,7 +116,13 @@ endif()
 # ============================================================================
 
 if(TEMPLATE_BUILD_BENCHMARKS)
-  add_subdirectory(benchmarks)
+  find_package(benchmark QUIET)
+
+  if(benchmark_FOUND)
+    add_subdirectory(benchmarks)
+  else()
+    message(STATUS "Google Benchmark not found, benchmarks will not be built")
+  endif()
 endif()
 
 # ============================================================================

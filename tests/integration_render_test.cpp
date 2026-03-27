@@ -59,7 +59,7 @@ static void test_home_template_full_render()
   items.emplace_back("Pen");
   ctx.set("items", items);
 
-  const auto result = engine.render("home", ctx);
+  const RenderResult result = engine.render("home", ctx);
 
   assert(result.success);
   assert(!result.from_cache);
@@ -84,9 +84,11 @@ static void test_home_template_without_admin()
   items.emplace_back("B");
   ctx.set("items", items);
 
-  const auto result = engine.render("home", ctx);
+  const RenderResult result = engine.render("home", ctx);
 
   assert(result.success);
+  assert(!result.from_cache);
+  assert(result.escaped);
   assert(
       result.output ==
       "Hello Bob!\n"
@@ -101,9 +103,11 @@ static void test_profile_template_with_escape()
   ctx.set("username", "gaspard");
   ctx.set("bio", "<b>builder</b>");
 
-  const auto result = engine.render("profile", ctx);
+  const RenderResult result = engine.render("profile", ctx);
 
   assert(result.success);
+  assert(!result.from_cache);
+  assert(result.escaped);
   assert(
       result.output ==
       "User: gaspard\n"
@@ -117,9 +121,11 @@ static void test_empty_loop_render()
   Context ctx;
   ctx.set("items", Array{});
 
-  const auto result = engine.render("empty_loop", ctx);
+  const RenderResult result = engine.render("empty_loop", ctx);
 
   assert(result.success);
+  assert(!result.from_cache);
+  assert(result.escaped);
   assert(result.output == "StartEnd");
 }
 
@@ -128,12 +134,14 @@ static void test_render_with_object_context()
   Engine engine(make_loader());
 
   Object values;
-  values["username"] = "adastra";
-  values["bio"] = "offline-first";
+  values["username"] = Value("adastra");
+  values["bio"] = Value("offline-first");
 
-  const auto result = engine.render("profile", values);
+  const RenderResult result = engine.render("profile", Context(values));
 
   assert(result.success);
+  assert(!result.from_cache);
+  assert(result.escaped);
   assert(
       result.output ==
       "User: adastra\n"
