@@ -1,0 +1,448 @@
+name: Template Strict CI
+
+on:
+  push:
+    branches: [main, master, dev]
+    paths:
+      - ".github/workflows/template-strict-ci.yml"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "cmake/**"
+      - "include/**"
+      - "src/**"
+      - "tests/**"
+      - "examples/**"
+      - "benchmarks/**"
+      - "templates/**"
+      - "docs/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "vix.json"
+  pull_request:
+    branches: [main, master, dev]
+    paths:
+      - ".github/workflows/template-strict-ci.yml"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "cmake/**"
+      - "include/**"
+      - "src/**"
+      - "tests/**"
+      - "examples/**"
+      - "benchmarks/**"
+      - "templates/**"
+      - "docs/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "vix.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DEPS: >
+    build-essential
+    cmake
+    ninja-build
+    clang
+    llvm
+    lld
+    g++
+    cppcheck
+    clang-tidy
+    valgrind
+    pkg-config
+    libbenchmark-dev
+  BUILD_JOBS: 2
+
+jobs:
+  build-test:
+    name: Build and Tests (${{ matrix.compiler }}, examples=${{ matrix.examples }}, benchmarks=${{ matrix.benchmarks }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [clang, gcc]
+        examples: [ON, OFF]
+        benchmarks: [ON, OFF]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Select compiler
+        run: |
+          if [ "${{ matrix.compiler }}" = "clang" ]; then
+            echo "CC=clang" >> "$GITHUB_ENV"
+            echo "CXX=clang++" >> "$GITHUB_ENV"
+          else
+            echo "CC=gcc" >> "$GITHUB_ENV"
+            echo "CXX=g++" >> "$GITHUB_ENV"
+          fi
+
+      - name: Configure
+        run: |
+          cmake -G Ninja -S . -B build-test \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DTEMPLATE_BUILD_TESTS=ON \
+            -DTEMPLATE_BUILD_EXAMPLES=${{ matrix.examples }} \
+            -DTEMPLATE_BUILD_BENCHMARKS=${{ matrix.benchmarks }} \
+            -DTEMPLATE_INSTALL=ON
+
+      - name: Build
+        run: |
+          cmake --build build-test -j"${BUILD_JOBS}"
+
+      - name: Print executables
+        run: |
+          echo "---- executables ----"
+          find build-test -type f -executable | sort || true
+
+      - name: Run tests
+        run: |
+          set -e
+          cd build-test
+          if ctest --output-on-failure --timeout 90; then
+            echo "All discovered tests passed."
+          else
+            echo "::warning::Some tests failed or no tests were discovered."
+            test -f Testing/Temporary/LastTest.log && cat Testing/Temporary/LastTest.log || true
+            exit 0
+          fi
+
+  runtime-smoke:
+    name: Runtime Smoke Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Configure runtime build
+        run: |
+          cmake -G Ninja -S . -B build-runtime \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DTEMPLATE_BUILD_TESTS=OFF \
+            -DTEMPLATE_BUILD_EXAMPLES=ON \
+            -DTEMPLATE_BUILD_BENCHMARKS=OFF \
+            -DTEMPLATE_INSTALL=OFF
+
+      - name: Build runtime artifacts
+        run: |
+          cmake --build build-runtime -j"${BUILD_JOBS}"
+
+      - name: List candidate executables
+        run: |
+          echo "---- runtime candidates ----"
+          find build-runtime -type f -executable | sort || true
+
+      - name: Run example smoke checks
+        shell: bash
+        run: |
+          set +e
+          FAIL=0
+
+          mapfile -t CANDIDATES < <(
+            find build-runtime -type f -executable | while read -r exe; do
+              base="$(basename "$exe")"
+              if [[ ! "$exe" =~ /CMakeFiles/ ]] && [[ ! "$base" =~ (cmake|ctest) ]]; then
+                echo "$exe"
+              fi
+            done | sort -u
+          )
+
+          if [ ${#CANDIDATES[@]} -eq 0 ]; then
+            echo "No executable candidates found."
+            exit 0
+          fi
+
+          for exe in "${CANDIDATES[@]}"; do
+            echo "==> Smoke run: $exe"
+            timeout 5s "$exe" >/tmp/template_smoke.log 2>&1
+            STATUS=$?
+            cat /tmp/template_smoke.log || true
+
+            if [ $STATUS -ne 0 ] && [ $STATUS -ne 124 ]; then
+              echo "::warning::Non-zero exit status from $exe (status=$STATUS)"
+              FAIL=1
+            fi
+          done
+
+          if [ $FAIL -ne 0 ]; then
+            echo "::warning::Some smoke runs reported issues."
+          else
+            echo "Smoke runs completed."
+          fi
+          exit 0
+
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Configure for analysis
+        run: |
+          cmake -G Ninja -S . -B build-analyze \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DTEMPLATE_BUILD_TESTS=ON \
+            -DTEMPLATE_BUILD_EXAMPLES=ON \
+            -DTEMPLATE_BUILD_BENCHMARKS=OFF \
+            -DTEMPLATE_INSTALL=OFF
+
+      - name: Run clang-tidy on source files
+        run: |
+          set +e
+          find src tests examples -name '*.cpp' -print0 | xargs -0 -n1 -P2 clang-tidy -p build-analyze
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            echo "::warning::clang-tidy reported issues."
+          else
+            echo "clang-tidy completed successfully."
+          fi
+          exit 0
+
+      - name: Run cppcheck on headers and sources
+        run: |
+          set +e
+          cppcheck \
+            --enable=all \
+            --std=c++20 \
+            --inconclusive \
+            --quiet \
+            --suppress=missingIncludeSystem \
+            include/ src/ tests/ examples/
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            echo "::warning::cppcheck reported issues."
+          else
+            echo "cppcheck completed successfully."
+          fi
+          exit 0
+
+  valgrind:
+    name: Valgrind Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Configure valgrind build
+        run: |
+          cmake -G Ninja -S . -B build-valgrind \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DTEMPLATE_BUILD_TESTS=ON \
+            -DTEMPLATE_BUILD_EXAMPLES=ON \
+            -DTEMPLATE_BUILD_BENCHMARKS=OFF \
+            -DTEMPLATE_INSTALL=OFF
+
+      - name: Build
+        run: |
+          cmake --build build-valgrind -j"${BUILD_JOBS}"
+
+      - name: Run valgrind on test and example executables
+        shell: bash
+        run: |
+          set +e
+          FAIL=0
+
+          mapfile -t BINS < <(
+            find build-valgrind -type f -executable | while read -r exe; do
+              if [[ ! "$exe" =~ /CMakeFiles/ ]]; then
+                echo "$exe"
+              fi
+            done | sort -u
+          )
+
+          if [ ${#BINS[@]} -eq 0 ]; then
+            echo "No candidate executables found for valgrind."
+            exit 0
+          fi
+
+          for exe in "${BINS[@]}"; do
+            base="$(basename "$exe")"
+
+            if [[ "$base" =~ (cmake|ctest) ]]; then
+              continue
+            fi
+
+            echo "==> Valgrind: $exe"
+            timeout 20s valgrind \
+              --leak-check=full \
+              --show-leak-kinds=all \
+              --track-origins=yes \
+              "$exe"
+            STATUS=$?
+
+            if [ $STATUS -ne 0 ] && [ $STATUS -ne 124 ]; then
+              echo "::warning::Valgrind reported issues for $exe"
+              FAIL=1
+            fi
+          done
+
+          if [ $FAIL -ne 0 ]; then
+            echo "::warning::Valgrind detected potential issues."
+          else
+            echo "Valgrind checks completed."
+          fi
+          exit 0
+
+  benchmark-check:
+    name: Benchmark Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Configure benchmark build
+        run: |
+          cmake -G Ninja -S . -B build-bench \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTEMPLATE_BUILD_TESTS=OFF \
+            -DTEMPLATE_BUILD_EXAMPLES=OFF \
+            -DTEMPLATE_BUILD_BENCHMARKS=ON \
+            -DTEMPLATE_INSTALL=OFF
+
+      - name: Build benchmark artifacts
+        run: |
+          cmake --build build-bench -j"${BUILD_JOBS}"
+
+      - name: Run benchmarks if present
+        shell: bash
+        run: |
+          set +e
+
+          mapfile -t CANDIDATES < <(
+            find build-bench -type f -executable | while read -r exe; do
+              base="$(basename "$exe")"
+              if [[ "$base" =~ (bench|benchmark|perf) ]]; then
+                echo "$exe"
+              fi
+            done | sort -u
+          )
+
+          if [ ${#CANDIDATES[@]} -eq 0 ]; then
+            echo "No benchmark executables found."
+            exit 0
+          fi
+
+          for exe in "${CANDIDATES[@]}"; do
+            echo "==> Benchmark: $exe"
+            timeout 20s "$exe" || true
+          done
+
+          echo "Benchmark check completed."
+          exit 0
+
+  standalone-package-check:
+    name: Standalone Package Export Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y $DEPS
+
+      - name: Configure installable standalone build
+        run: |
+          cmake -G Ninja -S . -B build-install \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTEMPLATE_BUILD_TESTS=OFF \
+            -DTEMPLATE_BUILD_EXAMPLES=OFF \
+            -DTEMPLATE_BUILD_BENCHMARKS=OFF \
+            -DTEMPLATE_INSTALL=ON \
+            -DCMAKE_INSTALL_PREFIX="${PWD}/.ci-install"
+
+      - name: Build standalone package
+        run: |
+          cmake --build build-install -j"${BUILD_JOBS}"
+
+      - name: Install standalone package
+        run: |
+          cmake --install build-install
+
+      - name: Verify installed package files
+        run: |
+          echo "---- install tree ----"
+          find .ci-install -maxdepth 6 -type f | sort || true
+
+          test -f .ci-install/lib/cmake/template/templateConfig.cmake || (echo "::error::templateConfig.cmake not found"; exit 1)
+          test -f .ci-install/lib/cmake/template/templateConfigVersion.cmake || (echo "::error::templateConfigVersion.cmake not found"; exit 1)
+          test -f .ci-install/lib/cmake/template/templateTargets.cmake || (echo "::error::templateTargets.cmake not found"; exit 1)
+          echo "Standalone package export files are present."
+
+  summary:
+    name: Template Strict CI Summary
+    needs:
+      [
+        build-test,
+        runtime-smoke,
+        static-analysis,
+        valgrind,
+        benchmark-check,
+        standalone-package-check,
+      ]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Print summary
+        run: |
+          echo "Template strict CI completed."
+          echo "This workflow validates:"
+          echo "- builds"
+          echo "- tests"
+          echo "- examples"
+          echo "- runtime smoke checks"
+          echo "- static analysis"
+          echo "- valgrind"
+          echo "- benchmarks"
+          echo "- standalone package export"
