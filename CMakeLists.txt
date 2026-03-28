@@ -13,7 +13,14 @@ project(template
 option(TEMPLATE_BUILD_TESTS "Build template tests" ON)
 option(TEMPLATE_BUILD_EXAMPLES "Build template examples" ON)
 option(TEMPLATE_BUILD_BENCHMARKS "Build template benchmarks" ON)
-option(TEMPLATE_INSTALL "Enable install rules" ON)
+option(TEMPLATE_INSTALL "Enable standalone install/package rules" ON)
+
+if(DEFINED VIX_UMBRELLA_BUILD AND VIX_UMBRELLA_BUILD)
+  set(TEMPLATE_BUILD_TESTS OFF CACHE BOOL "Build template tests" FORCE)
+  set(TEMPLATE_BUILD_EXAMPLES OFF CACHE BOOL "Build template examples" FORCE)
+  set(TEMPLATE_BUILD_BENCHMARKS OFF CACHE BOOL "Build template benchmarks" FORCE)
+  set(TEMPLATE_INSTALL OFF CACHE BOOL "Enable standalone install/package rules" FORCE)
+endif()
 
 # ============================================================================
 # C++ standard
@@ -30,6 +37,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 endif()
+
+# ============================================================================
+# Dependencies for install/export
+# ============================================================================
+
+include(GNUInstallDirs)
 
 # ============================================================================
 # Library
@@ -60,7 +73,7 @@ add_library(vix::template ALIAS template)
 target_include_directories(template
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
 target_compile_features(template PUBLIC cxx_std_20)
@@ -126,11 +139,30 @@ if(TEMPLATE_BUILD_BENCHMARKS)
 endif()
 
 # ============================================================================
-# Install
+# Install for Vix umbrella export
 # ============================================================================
 
-if(TEMPLATE_INSTALL)
-  include(GNUInstallDirs)
+if(DEFINED VIX_UMBRELLA_BUILD AND VIX_UMBRELLA_BUILD)
+  install(
+    TARGETS template
+    EXPORT VixTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  )
+
+  install(
+    DIRECTORY include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  )
+endif()
+
+# ============================================================================
+# Standalone install/package
+# ============================================================================
+
+if(TEMPLATE_INSTALL AND NOT (DEFINED VIX_UMBRELLA_BUILD AND VIX_UMBRELLA_BUILD))
   include(CMakePackageConfigHelpers)
 
   install(
