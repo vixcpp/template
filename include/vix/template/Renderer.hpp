@@ -153,7 +153,25 @@ namespace vix::template_
         const Context &context,
         Output &out) const
     {
-      plan.execute_stream(*this, context, out);
+      execute_stream(plan, context, out);
+    }
+
+    /**
+     * @brief Execute a plan in streaming mode (internal helper).
+     *
+     * This is the actual implementation used by render_stream.
+     *
+     * @tparam Output Output sink type.
+     */
+    template <typename Output>
+    void execute_stream(
+        const ExecutionPlan &plan,
+        const Context &context,
+        Output &out) const
+    {
+      std::string buffer;
+      execute_plan(plan, context, buffer);
+      out.write(buffer);
     }
 
   private:

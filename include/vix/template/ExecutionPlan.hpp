@@ -251,37 +251,6 @@ namespace vix::template_
       instructions_.clear();
     }
 
-    /**
-     * @brief Execute the plan in streaming mode.
-     *
-     * This method renders the compiled execution plan incrementally and writes
-     * output to the provided sink.
-     *
-     * The renderer is used as the execution backend so that streaming rendering
-     * stays fully consistent with classic buffered rendering, including:
-     * - expression evaluation
-     * - filter application
-     * - HTML escaping
-     * - includes and control flow
-     *
-     * @tparam Output Output sink type. Must provide a `write(const std::string&)`
-     * method.
-     *
-     * @param renderer Renderer used to execute the plan.
-     * @param context Runtime rendering context.
-     * @param out Output sink receiving rendered chunks incrementally.
-     */
-    template <typename Output>
-    void execute_stream(
-        const Renderer &renderer,
-        const Context &context,
-        Output &out) const
-    {
-      std::string buffer;
-      renderer.execute_plan(*this, context, buffer);
-      out.write(buffer);
-    }
-
   private:
     /**
      * @brief Linear instruction storage.
