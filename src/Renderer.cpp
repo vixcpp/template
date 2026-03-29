@@ -26,6 +26,8 @@
 #include <cstdlib>
 #include <utility>
 #include <variant>
+#include <cctype>
+#include <string_view>
 
 namespace vix::template_
 {
@@ -53,6 +55,19 @@ namespace vix::template_
       {
         const char c = value[index];
         if (c < '0' || c > '9')
+        {
+          return false;
+        }
+      }
+
+      return true;
+    }
+
+    [[nodiscard]] bool is_whitespace_only(std::string_view text) noexcept
+    {
+      for (const unsigned char c : text)
+      {
+        if (!std::isspace(c))
         {
           return false;
         }
@@ -846,6 +861,15 @@ namespace vix::template_
       if (child->type() == NodeType::Extends)
       {
         continue;
+      }
+
+      if (child->type() == NodeType::Text)
+      {
+        const auto &text = static_cast<const TextNode &>(*child);
+        if (is_whitespace_only(text.value()))
+        {
+          continue;
+        }
       }
 
       if (child->type() != NodeType::Block)
