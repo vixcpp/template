@@ -1,5 +1,16 @@
 cmake_minimum_required(VERSION 3.20)
 
+# ============================================================================
+# Re-entry guard
+# Prevent the template module from being configured/exported twice
+# ============================================================================
+
+get_property(_VIX_TEMPLATE_MODULE_ALREADY_INCLUDED GLOBAL PROPERTY VIX_TEMPLATE_MODULE_ALREADY_INCLUDED)
+if(_VIX_TEMPLATE_MODULE_ALREADY_INCLUDED)
+  return()
+endif()
+set_property(GLOBAL PROPERTY VIX_TEMPLATE_MODULE_ALREADY_INCLUDED TRUE)
+
 project(template
   VERSION 0.1.0
   DESCRIPTION "Template rendering engine for Vix.cpp"
@@ -48,7 +59,7 @@ include(GNUInstallDirs)
 # Library
 # ============================================================================
 
-add_library(template
+set(TEMPLATE_SOURCES
   src/Builtins.cpp
   src/Cache.cpp
   src/Compiler.cpp
@@ -68,7 +79,11 @@ add_library(template
   src/Optimizer.cpp
 )
 
-add_library(vix::template ALIAS template)
+add_library(template STATIC ${TEMPLATE_SOURCES})
+
+if(NOT TARGET vix::template)
+  add_library(vix::template ALIAS template)
+endif()
 
 target_include_directories(template
   PUBLIC
