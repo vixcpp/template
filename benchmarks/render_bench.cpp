@@ -105,7 +105,7 @@ static void BM_render_plain_text(benchmark::State &state)
 
   for (auto _ : state)
   {
-    const RenderResult result = tpl.render(ctx);
+    RenderResult result = tpl.render(ctx);
     benchmark::DoNotOptimize(result.output);
   }
 
@@ -141,7 +141,7 @@ static void BM_render_variable(benchmark::State &state)
 
   for (auto _ : state)
   {
-    const RenderResult result = tpl.render(ctx);
+    RenderResult result = tpl.render(ctx);
     benchmark::DoNotOptimize(result.output);
   }
 
@@ -177,7 +177,7 @@ static void BM_render_expression(benchmark::State &state)
 
   for (auto _ : state)
   {
-    const RenderResult result = tpl.render(ctx);
+    RenderResult result = tpl.render(ctx);
     benchmark::DoNotOptimize(result.output);
   }
 
@@ -213,7 +213,7 @@ static void BM_render_if(benchmark::State &state)
 
   for (auto _ : state)
   {
-    const RenderResult result = tpl.render(ctx);
+    RenderResult result = tpl.render(ctx);
     benchmark::DoNotOptimize(result.output);
   }
 
@@ -249,7 +249,7 @@ static void BM_render_for_loop(benchmark::State &state)
 
   for (auto _ : state)
   {
-    const RenderResult result = tpl.render(ctx);
+    RenderResult result = tpl.render(ctx);
     benchmark::DoNotOptimize(result.output);
   }
 
@@ -290,7 +290,7 @@ static void BM_render_mixed_template(benchmark::State &state)
 
   for (auto _ : state)
   {
-    const RenderResult result = tpl.render(ctx);
+    RenderResult result = tpl.render(ctx);
     benchmark::DoNotOptimize(result.output);
   }
 
@@ -339,7 +339,7 @@ static void BM_render_include(benchmark::State &state)
 
   for (auto _ : state)
   {
-    const RenderResult result = tpl.render(ctx);
+    RenderResult result = tpl.render(ctx);
     benchmark::DoNotOptimize(result.output);
   }
 
@@ -387,7 +387,7 @@ static void BM_render_engine_cached_template(benchmark::State &state)
 
   for (auto _ : state)
   {
-    const RenderResult result = engine.render("profile.html", ctx);
+    RenderResult result = engine.render("profile.html", ctx);
     benchmark::DoNotOptimize(result.output);
   }
 
@@ -435,7 +435,7 @@ static void BM_render_engine_cached_include(benchmark::State &state)
 
   for (auto _ : state)
   {
-    const RenderResult result = engine.render("page.html", ctx);
+    RenderResult result = engine.render("page.html", ctx);
     benchmark::DoNotOptimize(result.output);
   }
 
@@ -489,7 +489,7 @@ static void BM_render_engine_no_cache_include(benchmark::State &state)
 
   for (auto _ : state)
   {
-    const RenderResult result = engine.render("page.html", ctx);
+    RenderResult result = engine.render("page.html", ctx);
     benchmark::DoNotOptimize(result.output);
   }
 
