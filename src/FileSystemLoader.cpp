@@ -16,10 +16,11 @@
 #include <vix/template/FileSystemLoader.hpp>
 #include <vix/template/Error.hpp>
 
+#include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <utility>
-#include <filesystem>
 
 namespace vix::template_
 {
@@ -78,17 +79,15 @@ namespace vix::template_
     const std::string path = join_path(root_, name);
 
     std::error_code ec;
-
-    const fs::file_time_type last_write =
-        fs::last_write_time(path, ec);
+    const fs::file_time_type last_write = fs::last_write_time(path, ec);
 
     if (ec)
     {
       return {};
     }
 
-    const auto since_epoch =
-        last_write.time_since_epoch().count();
+    const std::int64_t since_epoch =
+        static_cast<std::int64_t>(last_write.time_since_epoch().count());
 
     return std::to_string(since_epoch);
   }
