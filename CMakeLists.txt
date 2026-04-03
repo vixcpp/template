@@ -127,7 +127,11 @@ target_compile_definitions(template
 # ============================================================================
 
 if(TEMPLATE_BUILD_EXAMPLES)
-  add_subdirectory(examples)
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/examples/CMakeLists.txt")
+    add_subdirectory(examples)
+  else()
+    message(STATUS "[template] examples/ missing CMakeLists.txt -> skipping")
+  endif()
 endif()
 
 # ============================================================================
@@ -136,7 +140,11 @@ endif()
 
 if(TEMPLATE_BUILD_TESTS)
   enable_testing()
-  add_subdirectory(tests)
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
+    add_subdirectory(tests)
+  else()
+    message(STATUS "[template] tests/ missing CMakeLists.txt -> skipping")
+  endif()
 endif()
 
 # ============================================================================
@@ -147,7 +155,11 @@ if(TEMPLATE_BUILD_BENCHMARKS)
   find_package(benchmark QUIET)
 
   if(benchmark_FOUND)
-    add_subdirectory(benchmarks)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/CMakeLists.txt")
+      add_subdirectory(benchmarks)
+    else()
+      message(STATUS "[template] benchmarks/ missing CMakeLists.txt -> skipping")
+    endif()
   else()
     message(STATUS "Google Benchmark not found, benchmarks will not be built")
   endif()
