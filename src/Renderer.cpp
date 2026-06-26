@@ -401,10 +401,30 @@ namespace vix::template_
     }
 
     Value current = evaluate_expression(*instr.expression, context);
-    current = apply_filters(current, instr.filters);
+
+    bool escape_output = auto_escape_html_;
+
+    for (const auto &filter : instr.filters)
+    {
+      const std::string &name = filter.name();
+
+      if (name == "safe" || name == "raw")
+      {
+        escape_output = false;
+        continue;
+      }
+
+      const auto it = filters_.find(name);
+      if (it == filters_.end())
+      {
+        throw RendererError("unknown filter: " + name);
+      }
+
+      current = it->second(current);
+    }
 
     std::string rendered = current.to_string();
-    if (auto_escape_html_)
+    if (escape_output)
     {
       rendered = Escape::html(rendered);
     }
@@ -1074,10 +1094,30 @@ namespace vix::template_
     {
       const auto &variable = static_cast<const VariableNode &>(node);
       Value current = evaluate_expression(variable.expression(), context);
-      current = apply_filters(current, variable.filters());
+
+      bool escape_output = auto_escape_html_;
+
+      for (const auto &filter : variable.filters())
+      {
+        const std::string &name = filter.name();
+
+        if (name == "safe" || name == "raw")
+        {
+          escape_output = false;
+          continue;
+        }
+
+        const auto it = filters_.find(name);
+        if (it == filters_.end())
+        {
+          throw RendererError("unknown filter: " + name);
+        }
+
+        current = it->second(current);
+      }
 
       std::string rendered = current.to_string();
-      if (auto_escape_html_)
+      if (escape_output)
       {
         rendered = Escape::html(rendered);
       }

@@ -96,6 +96,40 @@ static std::string render_with_loader(
   return compiled.render(ctx, auto_escape_html).output;
 }
 
+static void test_render_safe_filter()
+{
+  Context ctx;
+  ctx.set("html", "<strong>OK</strong>");
+
+  const std::string out = render("{{ html | safe }}", ctx);
+
+  assert(out == "<strong>OK</strong>");
+}
+
+static void test_render_raw_filter()
+{
+  Context ctx;
+  ctx.set("html", "<div class=\"card\">OK</div>");
+
+  const std::string out = render("{{ html | raw }}", ctx);
+
+  assert(out == "<div class=\"card\">OK</div>");
+}
+
+static void test_safe_filter_does_not_disable_escape_globally()
+{
+  Context ctx;
+  ctx.set("html", "<strong>OK</strong>");
+  ctx.set("text", "<script>alert(1)</script>");
+
+  const std::string out =
+      render("{{ html | safe }} {{ text }}", ctx);
+
+  assert(
+      out ==
+      "<strong>OK</strong> &lt;script&gt;alert(1)&lt;/script&gt;");
+}
+
 static std::string render_stream_with_loader(
     const std::string &tpl,
     const Context &ctx,
@@ -1066,6 +1100,9 @@ int main()
   test_render_if_with_expression_false();
   test_render_for();
   test_render_nested();
+  test_render_safe_filter();
+  test_render_raw_filter();
+  test_safe_filter_does_not_disable_escape_globally();
   test_html_escape();
   test_render_without_html_escape();
   test_render_upper_filter();
