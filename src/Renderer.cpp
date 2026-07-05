@@ -65,8 +65,9 @@ namespace vix::template_
 
     [[nodiscard]] bool is_whitespace_only(std::string_view text) noexcept
     {
-      for (const unsigned char c : text)
+      for (char raw_c : text)
       {
+        const auto c = static_cast<unsigned char>(raw_c);
         if (!std::isspace(c))
         {
           return false;
