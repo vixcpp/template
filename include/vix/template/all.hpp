@@ -21,8 +21,8 @@
  *
  *  Vix.cpp
  */
-#ifndef VIX_TEMPLATE_TEMPLATE_HPP
-#define VIX_TEMPLATE_TEMPLATE_HPP
+#ifndef VIX_TEMPLATE_ALL_HPP
+#define VIX_TEMPLATE_ALL_HPP
 
 #include <vix/template/AST.hpp>
 #include <vix/template/Builtins.hpp>
@@ -48,4 +48,4 @@
 #include <vix/template/Value.hpp>
 #include <vix/template/Version.hpp>
 
-#endif // VIX_TEMPLATE_TEMPLATE_HPP
+#endif // VIX_TEMPLATE_ALL_HPP

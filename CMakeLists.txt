@@ -112,17 +112,6 @@ elseif(MSVC)
 endif()
 
 # ============================================================================
-# Version macros
-# ============================================================================
-
-target_compile_definitions(template
-  PUBLIC
-    TEMPLATE_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
-    TEMPLATE_VERSION_MINOR=${PROJECT_VERSION_MINOR}
-    TEMPLATE_VERSION_PATCH=${PROJECT_VERSION_PATCH}
-)
-
-# ============================================================================
 # Examples
 # ============================================================================
 

@@ -21,17 +21,17 @@ namespace vix::template_
   /**
    * @brief Major version of the template module.
    */
-  inline constexpr int VERSION_MAJOR = TEMPLATE_VERSION_MAJOR;
+  inline constexpr int VERSION_MAJOR = 0;
 
   /**
    * @brief Minor version of the template module.
    */
-  inline constexpr int VERSION_MINOR = TEMPLATE_VERSION_MINOR;
+  inline constexpr int VERSION_MINOR = 1;
 
   /**
    * @brief Patch version of the template module.
    */
-  inline constexpr int VERSION_PATCH = TEMPLATE_VERSION_PATCH;
+  inline constexpr int VERSION_PATCH = 0;
 
   /**
    * @brief Full version string.
